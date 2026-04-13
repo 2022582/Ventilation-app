@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>스마트 국소배기 자가진단 시스템</title>
+    <style>
+        :root { --primary-color: #2c3e50; --accent-color: #3498db; --danger-color: #e74c3c; --success-color: #27ae60; }
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: #ecf0f1; margin: 0; padding: 10px; }
+        .header { background: var(--primary-color); color: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .container { display: flex; flex-direction: column; gap: 10px; }
+        
+        /* 패널 스타일 */
+        .panel { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .sidebar { order: 2; display: flex; flex-direction: column; }
+        .main-content { order: 1; position: relative; }
+        
+        /* 도면 영역 */
+        .layout-container { position: relative; width: 100%; height: 400px; background: #fff; border: 2px solid #bdc3c7; border-radius: 4px; overflow: hidden; touch-action: none; }
+        canvas { position: absolute; top: 0; left: 0; z-index: 1; }
+        .canvas-drawing { cursor: crosshair; }
+        .hood-marker { position: absolute; z-index: 10; padding: 5px 10px; border-radius: 4px; color: white; font-weight: bold; font-size: 12px; cursor: move; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+
+        /* 입력 폼 */
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; }
+        select, input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+        .radio-group { display: flex; gap: 15px; margin-bottom: 10px; }
+        .radio-group label { display: inline; font-weight: normal; }
+        
+        button { background: var(--accent-color); color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 5px; }
+        .btn-draw { background: #95a5a6; }
+        .btn-print { background: var(--primary-color); width: auto; }
+        
+        .status-list { margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; flex-grow: 1; overflow-y: auto; }
+        .status-card { background: #f9f9f9; border-left: 5px solid #ccc; padding: 10px; margin-bottom: 8px; border-radius: 4px; font-size: 13px; }
+
+        /* 저작권 및 문의처 스타일 */
+        .copyright-sidebar { margin-top: 20px; padding-top: 15px; border-top: 1px dashed #ccc; text-align: center; font-size: 12px; color: #7f8c8d; }
+        .copyright-print { display: none; }
+
+        @media (min-width: 768px) {
+            .container { flex-direction: row; }
+            .sidebar { width: 350px; order: 1; }
+            .main-content { flex: 1; order: 2; }
+            .layout-container { height: 600px; }
+        }
+
+        /* 인쇄 설정 */
+        @media print {
+            .sidebar, button, .header button { display: none !important; }
+            body { background: white; padding: 0; }
+            .main-content { width: 100%; }
+            .layout-container { border: 1px solid #000; height: 500px; }
+            #printTitle { display: block !important; text-align: center; font-size: 24px; margin-bottom: 20px; font-weight: bold; }
+            .print-table { display: table !important; width: 100%; border-collapse: collapse; margin-top: 20px; }
+            .print-table th, .print-table td { border: 1px solid #000; padding: 8px; text-align: center; font-size: 14px; }
+            .copyright-print { display: block; margin-top: 40px; text-align: center; font-size: 12px; color: #555; border-top: 1px solid #000; padding-top: 10px; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+        .print-table, #printTitle { display: none; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2 style="margin:0; font-size: 18px;">🛡️ 스마트 국소배기 통합 관리</h2>
+        <button class="btn-print" onclick="window.print()">보고서 출력</button>
+    </div>
+
+    <div class="container">
+        <div class="sidebar panel">
+            <h3>환경 설정</h3>
+            
+            <div class="form-group">
+                <label>🏢 1. 전체 공장(사업장)명</label>
+                <input type="text" id="factoryName" placeholder="예: 창원 제1공장">
+            </div>
+
+            <hr style="border: 0; height: 1px; background: #eee; margin: 15px 0;">
+
+            <div class="form-group">
+                <label>2. 세부 공정명</label>
+                <input type="text" id="processName" placeholder="예: 도장 1라인, 용접부스">
+            </div>
+
+            <div class="form-group">
+                <label>3. 물질 상태 선택</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="state" value="gaseous" checked onchange="updateLegalVelocity()"> 가스상</label>
+                    <label><input type="radio" name="state" value="particulate" onchange="updateLegalVelocity()"> 입자상</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>4. 후드 형태 선택</label>
+                <select id="hoodType" onchange="updateLegalVelocity()">
+                    <option value="enclosed">포위식</option>
+                    <option value="booth">부스식</option>
+                    <option value="lateral">외부식 - 측방형</option>
+                    <option value="downward">외부식 - 하방형</option>
+                    <option value="upward">외부식 - 상방형</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>5. 법적 제어유속 (자동입력)</label>
+                <input type="number" id="legalVelocity" readonly style="background-color: #f8f9fa;">
+            </div>
+
+            <div class="form-group">
+                <label>6. 실제 측정유속 (m/s)</label>
+                <input type="number" id="measuredVelocity" step="0.01" placeholder="현장 측정값 입력">
+            </div>
+
+            <button onclick="addHoodToLayout()">도면에 배치 및 저장</button>
+            <button class="btn-draw" onclick="toggleDrawMode()" id="drawBtn">도면 그리기 모드: OFF</button>
+            <button class="btn-draw" style="background:#e67e22" onclick="clearCanvas()">도면 초기화</button>
+
+            <div class="status-list" id="statusList">
+                <strong>현장 모니터링 목록</strong>
+            </div>
+
+            <div class="copyright-sidebar">
+                ⓒ 2026 All rights reserved.<br>
+                시스템 오류 및 기술 문의: <strong>2022582@kiha.or.kr</strong>
+            </div>
+        </div>
+
+        <div class="main-content panel">
+            <div id="printTitle">국소배기장치 자체 점검 보고서</div>
+            
+            <h3 id="modeIndicator" style="margin-top: 0;">현장 레이아웃 (Layout)</h3>
+            <div class="layout-container" id="layoutContainer">
+                <canvas id="drawingCanvas"></canvas>
+            </div>
+
+            <table class="print-table" id="printTable">
+                <thead>
+                    <tr>
+                        <th>번호</th>
+                        <th>공정명</th>
+                        <th>구분</th>
+                        <th>후드형태</th>
+                        <th>법적유속</th>
+                        <th>측정유속</th>
+                        <th>판정</th>
+                    </tr>
+                </thead>
+                <tbody id="printBody"></tbody>
+            </table>
+
+            <div class="copyright-print">
+                ⓒ 2026 AI·스마트 산업안전기술 대시보드 | 시스템 오류 및 문의: 2022582@kiha.or.kr
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('layoutContainer');
+        
+        let isDrawingMode = false;
+        let isDrawing = false;
+        let startX, startY;
+        let lines = []; 
+        let hoodData = [];
+        const SNAP_RADIUS = 20;
+
+        document.getElementById('factoryName').addEventListener('input', function() {
+            const printTitle = document.getElementById('printTitle');
+            if(this.value.trim() === '') {
+                printTitle.innerText = "국소배기장치 자체 점검 보고서";
+            } else {
+                printTitle.innerText = `[${this.value}] 국소배기장치 자체 점검 보고서`;
+            }
+        });
+
+        function resizeCanvas() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            redrawCanvas(); 
+        }
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100);
+
+        const velocityMap = {
+            gaseous: { enclosed: 0.4, booth: 0.4, lateral: 0.5, downward: 0.5, upward: 1.0 },
+            particulate: { enclosed: 0.7, booth: 0.7, lateral: 1.0, downward: 1.0, upward: 1.2 }
+        };
+
+        function updateLegalVelocity() {
+            const state = document.querySelector('input[name="state"]:checked').value;
+            const type = document.getElementById('hoodType').value;
+            document.getElementById('legalVelocity').value = velocityMap[state][type].toFixed(1);
+        }
+        updateLegalVelocity();
+
+        function toggleDrawMode() {
+            isDrawingMode = !isDrawingMode;
+            document.getElementById('drawBtn').innerText = `도면 그리기 모드: ${isDrawingMode ? 'ON' : 'OFF'}`;
+            document.getElementById('modeIndicator').innerText = isDrawingMode ? "국소배기 배치도" : "현장 레이아웃 (Layout)";
+            isDrawingMode ? canvas.classList.add('canvas-drawing') : canvas.classList.remove('canvas-drawing');
+        }
+
+        function redrawCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            
+            lines.forEach(line => {
+                ctx.beginPath();
+                ctx.moveTo(line.x1, line.y1);
+                ctx.lineTo(line.x2, line.y2);
+                ctx.stroke();
+            });
+        }
+
+        function getSnappedPoint(x, y) {
+            let snappedX = x;
+            let snappedY = y;
+            let minDistance = SNAP_RADIUS;
+
+            for (let line of lines) {
+                const points = [ {x: line.x1, y: line.y1}, {x: line.x2, y: line.y2} ];
+                for (let pt of points) {
+                    const dist = Math.sqrt(Math.pow(pt.x - x, 2) + Math.pow(pt.y - y, 2));
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        snappedX = pt.x;
+                        snappedY = pt.y;
+                    }
+                }
+            }
+            return { x: snappedX, y: snappedY };
+        }
+
+        function startPosition(e) {
+            if (!isDrawingMode) return;
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            
+            const snapped = getSnappedPoint(rawX, rawY);
+            startX = snapped.x;
+            startY = snapped.y;
+        }
+
+        function drawLine(e) {
+            if (!isDrawing) return;
+            e.preventDefault(); 
+            const rect = canvas.getBoundingClientRect();
+            let currentX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            let currentY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+
+            const snapped = getSnappedPoint(currentX, currentY);
+            currentX = snapped.x;
+            currentY = snapped.y;
+
+            redrawCanvas();
+            
+            if (snapped.x !== (e.touches ? e.touches[0].clientX : e.clientX) - rect.left) {
+                ctx.beginPath();
+                ctx.arc(currentX, currentY, 6, 0, Math.PI * 2);
+                ctx.fillStyle = '#e74c3c';
+                ctx.fill();
+            }
+
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(currentX, currentY);
+            ctx.strokeStyle = '#3498db'; 
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+
+        function stopPosition(e) {
+            if (!isDrawing) return;
+            isDrawing = false;
+            const rect = canvas.getBoundingClientRect();
+            let endX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX) - rect.left;
+            let endY = (e.changedTouches ? e.changedTouches[0].clientY : e.clientY) - rect.top;
+
+            const snapped = getSnappedPoint(endX, endY);
+            endX = snapped.x;
+            endY = snapped.y;
+
+            if (Math.abs(endX - startX) > 5 || Math.abs(endY - startY) > 5) {
+                lines.push({ x1: startX, y1: startY, x2: endX, y2: endY });
+            }
+            redrawCanvas();
+        }
+
+        canvas.addEventListener('mousedown', startPosition);
+        canvas.addEventListener('mousemove', drawLine);
+        canvas.addEventListener('mouseup', stopPosition);
+        canvas.addEventListener('mouseleave', stopPosition);
+        canvas.addEventListener('touchstart', startPosition, {passive: false});
+        canvas.addEventListener('touchmove', drawLine, {passive: false});
+        canvas.addEventListener('touchend', stopPosition);
+
+        function clearCanvas() { lines = []; redrawCanvas(); }
+
+        function addHoodToLayout() {
+            const processName = document.getElementById('processName').value;
+            const measured = document.getElementById('measuredVelocity').value;
+            
+            if (!processName) { alert("공정명을 입력해주세요."); return; }
+            if (!measured) { alert("측정 유속을 입력해주세요."); return; }
+
+            const state = document.querySelector('input[name="state"]:checked').value;
+            const typeSelect = document.getElementById('hoodType');
+            const typeText = typeSelect.options[typeSelect.selectedIndex].text;
+            const legal = document.getElementById('legalVelocity').value;
+            const isGood = parseFloat(measured) >= parseFloat(legal);
+
+            const data = {
+                id: hoodData.length + 1,
+                process: processName,
+                state: state === 'gaseous' ? '가스상' : '입자상',
+                type: typeText,
+                legal: legal,
+                measured: measured,
+                result: isGood ? '양호' : '미흡'
+            };
+            hoodData.push(data);
+
+            const marker = document.createElement('div');
+            marker.className = 'hood-marker';
+            marker.style.backgroundColor = isGood ? '#3498db' : '#e74c3c';
+            marker.style.left = '50%';
+            marker.style.top = '50%';
+            marker.innerText = `H${data.id}`;
+            marker.title = `[${data.process}] ${data.type} (${data.result})`;
+            
+            function addDragLogic(el) {
+                el.onmousedown = function(e) {
+                    if(isDrawingMode) return;
+                    let shiftX = e.clientX - el.getBoundingClientRect().left;
+                    let shiftY = e.clientY - el.getBoundingClientRect().top;
+                    function moveAt(pageX, pageY) {
+                        el.style.left = pageX - container.getBoundingClientRect().left - shiftX + 'px';
+                        el.style.top = pageY - container.getBoundingClientRect().top - shiftY + 'px';
+                    }
+                    function onMouseMove(e) { moveAt(e.pageX, e.pageY); }
+                    document.addEventListener('mousemove', onMouseMove);
+                    el.onmouseup = function() { document.removeEventListener('mousemove', onMouseMove); };
+                };
+
+                el.ontouchstart = function(e) {
+                    if(isDrawingMode) return;
+                    const touch = e.touches[0];
+                    let shiftX = touch.clientX - el.getBoundingClientRect().left;
+                    let shiftY = touch.clientY - el.getBoundingClientRect().top;
+                    function moveAt(pageX, pageY) {
+                        el.style.left = pageX - container.getBoundingClientRect().left - shiftX + 'px';
+                        el.style.top = pageY - container.getBoundingClientRect().top - shiftY + 'px';
+                    }
+                    function onTouchMove(e) { e.preventDefault(); moveAt(e.touches[0].clientX, e.touches[0].clientY); }
+                    document.addEventListener('touchmove', onTouchMove, {passive: false});
+                    el.ontouchend = function() { document.removeEventListener('touchmove', onTouchMove); };
+                };
+            }
+            
+            addDragLogic(marker);
+            container.appendChild(marker);
+            updateStatusList();
+            
+            document.getElementById('processName').value = '';
+            document.getElementById('measuredVelocity').value = '';
+        }
+
+        function updateStatusList() {
+            const list = document.getElementById('statusList');
+            const printBody = document.getElementById('printBody');
+            
+            // 기존 목록 지우고 제목 유지
+            list.innerHTML = '<strong>현장 모니터링 목록</strong>';
+            printBody.innerHTML = '';
+
+            hoodData.forEach(h => {
+                const card = document.createElement('div');
+                card.className = 'status-card';
+                card.style.borderLeftColor = h.result === '양호' ? '#3498db' : '#e74c3c';
+                card.innerHTML = `[${h.id}] <strong>${h.process}</strong> / ${h.type} (${h.state}) <br> <b>측정: ${h.measured}</b> (법적: ${h.legal}) -> <b style="color:${h.result === '양호' ? '#3498db' : '#e74c3c'}">${h.result}</b>`;
+                list.appendChild(card);
+
+                const tr = `<tr><td>${h.id}</td><td>${h.process}</td><td>${h.state}</td><td>${h.type}</td><td>${h.legal}</td><td>${h.measured}</td><td><strong style="color:${h.result === '양호' ? '#3498db' : '#e74c3c'}">${h.result}</strong></td></tr>`;
+                printBody.innerHTML += tr;
+            });
+        }
+    </script>
+</body>
+</html>
