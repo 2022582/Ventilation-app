@@ -46,16 +46,27 @@
             .layout-container { height: 600px; }
         }
 
-        /* 인쇄 설정 */
+        /* --- A4 출력(인쇄) 전용 규격 설정 --- */
         @media print {
+            @page {
+                size: A4 portrait; /* A4 세로 규격 강제 지정 */
+                margin: 15mm; /* 출력 여백 설정 */
+            }
+            body { background: white; margin: 0; padding: 0; }
             .sidebar, button, .header button { display: none !important; }
-            body { background: white; padding: 0; }
-            .main-content { width: 100%; }
-            .layout-container { border: 1px solid #000; height: 500px; }
-            #printTitle { display: block !important; text-align: center; font-size: 24px; margin-bottom: 20px; font-weight: bold; }
-            .print-table { display: table !important; width: 100%; border-collapse: collapse; margin-top: 20px; }
-            .print-table th, .print-table td { border: 1px solid #000; padding: 8px; text-align: center; font-size: 14px; }
-            .copyright-print { display: block; margin-top: 40px; text-align: center; font-size: 12px; color: #555; border-top: 1px solid #000; padding-top: 10px; }
+            .main-content { width: 100%; box-shadow: none; border: none; padding: 0; }
+            
+            /* 도면 높이를 A4 비율에 맞게 고정 */
+            .layout-container { border: 2px solid #000; height: 120mm; page-break-inside: avoid; }
+            
+            #printTitle { display: block !important; text-align: center; font-size: 24pt; margin-bottom: 25px; font-weight: bold; color: black; }
+            
+            .print-table { display: table !important; width: 100%; border-collapse: collapse; margin-top: 25px; font-size: 11pt; page-break-inside: auto; }
+            .print-table tr { page-break-inside: avoid; page-break-after: auto; }
+            .print-table th { background-color: #f2f2f2 !important; }
+            .print-table th, .print-table td { border: 1px solid #000; padding: 10px; text-align: center; }
+            
+            .copyright-print { display: block; margin-top: 30px; text-align: center; font-size: 10pt; color: #333; border-top: 1px solid #000; padding-top: 10px; page-break-inside: avoid; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
         .print-table, #printTitle { display: none; }
@@ -252,16 +263,31 @@
             if (!isDrawing) return;
             e.preventDefault(); 
             const rect = canvas.getBoundingClientRect();
-            let currentX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-            let currentY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
 
-            const snapped = getSnappedPoint(currentX, currentY);
-            currentX = snapped.x;
-            currentY = snapped.y;
+            // --- 1. 직각 (수평/수직) 보정 로직 추가 ---
+            let diffX = Math.abs(rawX - startX);
+            let diffY = Math.abs(rawY - startY);
+            
+            // X축 이동이 Y축 이동보다 2.5배 이상 크면 수평(가로)으로 고정
+            if (diffX > diffY * 2.5) {
+                rawY = startY;
+            } 
+            // Y축 이동이 X축 이동보다 2.5배 이상 크면 수직(세로)으로 고정
+            else if (diffY > diffX * 2.5) {
+                rawX = startX;
+            }
+
+            // --- 2. 끝점 스냅 적용 ---
+            const snapped = getSnappedPoint(rawX, rawY);
+            let currentX = snapped.x;
+            let currentY = snapped.y;
 
             redrawCanvas();
             
-            if (snapped.x !== (e.touches ? e.touches[0].clientX : e.clientX) - rect.left) {
+            // 스냅된 경우 빨간 점 표시
+            if (currentX !== rawX || currentY !== rawY) {
                 ctx.beginPath();
                 ctx.arc(currentX, currentY, 6, 0, Math.PI * 2);
                 ctx.fillStyle = '#e74c3c';
@@ -280,12 +306,22 @@
             if (!isDrawing) return;
             isDrawing = false;
             const rect = canvas.getBoundingClientRect();
-            let endX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX) - rect.left;
-            let endY = (e.changedTouches ? e.changedTouches[0].clientY : e.clientY) - rect.top;
+            let rawX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX) - rect.left;
+            let rawY = (e.changedTouches ? e.changedTouches[0].clientY : e.clientY) - rect.top;
 
-            const snapped = getSnappedPoint(endX, endY);
-            endX = snapped.x;
-            endY = snapped.y;
+            // 직각 보정
+            let diffX = Math.abs(rawX - startX);
+            let diffY = Math.abs(rawY - startY);
+            if (diffX > diffY * 2.5) {
+                rawY = startY;
+            } else if (diffY > diffX * 2.5) {
+                rawX = startX;
+            }
+
+            // 끝점 스냅
+            const snapped = getSnappedPoint(rawX, rawY);
+            let endX = snapped.x;
+            let endY = snapped.y;
 
             if (Math.abs(endX - startX) > 5 || Math.abs(endY - startY) > 5) {
                 lines.push({ x1: startX, y1: startY, x2: endX, y2: endY });
@@ -376,7 +412,6 @@
             const list = document.getElementById('statusList');
             const printBody = document.getElementById('printBody');
             
-            // 기존 목록 지우고 제목 유지
             list.innerHTML = '<strong>현장 모니터링 목록</strong>';
             printBody.innerHTML = '';
 
