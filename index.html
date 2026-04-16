@@ -136,7 +136,7 @@
                 </div>
                 
                 <div id="circleInputs" class="sub-inputs" style="display: none;">
-                    <input type="number" id="circleD" step="0.01" placeholder="원형 직경 (m)" oninput="calculateArea()">
+                    <input type="number" id="circleD" step="1" placeholder="원형 직경 (mm)" oninput="calculateArea()">
                 </div>
 
                 <input type="number" id="hoodArea" step="0.01" placeholder="최종 개구면적 (m²)">
@@ -242,7 +242,6 @@
         }
         updateFormLogic();
 
-        // --- 개구면적 자동 계산 로직 ---
         function toggleAreaInputs() {
             const type = document.querySelector('input[name="areaType"]:checked').value;
             const rectInputs = document.getElementById('rectInputs');
@@ -277,14 +276,16 @@
                 const w = parseFloat(document.getElementById('rectW').value) || 0;
                 const h = parseFloat(document.getElementById('rectH').value) || 0;
                 if(w > 0 && h > 0) {
-                    hoodArea.value = (w * h).toFixed(3); // 소수점 3자리까지 표시
+                    hoodArea.value = (w * h).toFixed(3); 
                 } else {
                     hoodArea.value = '';
                 }
             } else if (type === 'circle') {
-                const d = parseFloat(document.getElementById('circleD').value) || 0;
-                if(d > 0) {
-                    hoodArea.value = (Math.PI * Math.pow(d, 2) / 4).toFixed(3);
+                // 입력값을 mm로 받고, 계산 시 m로 변환 (/1000)
+                const d_mm = parseFloat(document.getElementById('circleD').value) || 0;
+                if(d_mm > 0) {
+                    const d_m = d_mm / 1000;
+                    hoodArea.value = (Math.PI * Math.pow(d_m, 2) / 4).toFixed(3);
                 } else {
                     hoodArea.value = '';
                 }
@@ -452,7 +453,6 @@
             container.appendChild(marker);
             updateStatusList();
             
-            // 폼 입력창 초기화
             document.getElementById('processName').value = '';
             document.getElementById('rectW').value = '';
             document.getElementById('rectH').value = '';
