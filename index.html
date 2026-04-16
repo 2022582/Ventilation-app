@@ -17,7 +17,8 @@
         
         /* 도면 영역 */
         .layout-container { position: relative; width: 100%; height: 400px; background: #fff; border: 2px solid #bdc3c7; border-radius: 4px; overflow: hidden; touch-action: none; }
-        canvas { position: absolute; top: 0; left: 0; z-index: 1; }
+        /* 캔버스가 빈틈없이 영역을 채우도록 width, height 100% 명시 */
+        canvas { position: absolute; top: 0; left: 0; z-index: 1; width: 100%; height: 100%; }
         .canvas-drawing { cursor: crosshair; }
         
         /* 후드 마커 스타일 */
@@ -223,12 +224,14 @@
         let nextId = 1; 
         let currentEditId = null; 
 
-        // 캔버스 사이즈가 0이 되는 현상 원천 차단
+        // 캔버스 크기 동기화 (오류 방지 위해 크기 변경 시에만 실행)
         function resizeCanvas() {
             if (container.clientWidth > 0 && container.clientHeight > 0) {
-                canvas.width = container.clientWidth;
-                canvas.height = container.clientHeight;
-                redrawCanvas(); 
+                if (canvas.width !== container.clientWidth || canvas.height !== container.clientHeight) {
+                    canvas.width = container.clientWidth;
+                    canvas.height = container.clientHeight;
+                    redrawCanvas(); 
+                }
             }
         }
         window.addEventListener('resize', resizeCanvas);
@@ -306,7 +309,7 @@
             }
         }
 
-        // --- 도면 그리기 기능 ---
+        // --- 도면 그리기 ---
         function toggleDrawMode() {
             isDrawingMode = !isDrawingMode;
             document.getElementById('drawBtn').innerText = `도면 그리기 모드: ${isDrawingMode ? 'ON' : 'OFF'}`;
@@ -323,7 +326,6 @@
         function undoLastLine() { if (lines.length > 0) { lines.pop(); redrawCanvas(); } }
         document.addEventListener('keydown', function(event) { if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) { event.preventDefault(); undoLastLine(); } });
 
-        // 점선 가이드 생성용 수학 함수
         function getCalculatedPoint(rawX, rawY, originX, originY) {
             let currentX = rawX; let currentY = rawY;
             if (originX !== undefined && originY !== undefined) {
@@ -347,52 +349,45 @@
             return { x: currentX, y: currentY, guideX, guideY, isNodeSnapped };
         }
 
-        // 💡 [수정됨] 마우스/터치 좌표를 에러 없이 안전하게 추출하는 완벽한 로직
-        function getSafeRawCoords(e) {
+        // 💡 [에러 원천 차단] 가장 안전하고 확실한 좌표 추출 함수
+        function getEventLocation(e) {
             const rect = canvas.getBoundingClientRect();
-            let clientX, clientY;
+            let clientX = 0;
+            let clientY = 0;
 
-            if (e.type.includes('touch')) {
-                // 터치 배열이 존재하는지 길이까지 완벽하게 체크 (에러 원천 차단)
-                const touch = (e.touches && e.touches.length > 0) ? e.touches[0] : 
-                              (e.changedTouches && e.changedTouches.length > 0) ? e.changedTouches[0] : null;
-                if (!touch) return null; // 유효한 터치 없으면 무시
-                clientX = touch.clientX;
-                clientY = touch.clientY;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else if (e.changedTouches && e.changedTouches.length > 0) {
+                clientX = e.changedTouches[0].clientX;
+                clientY = e.changedTouches[0].clientY;
             } else {
                 clientX = e.clientX;
                 clientY = e.clientY;
             }
 
-            let rawX = clientX - rect.left;
-            let rawY = clientY - rect.top;
+            let x = clientX - rect.left;
+            let y = clientY - rect.top;
 
-            // 캔버스 크기를 초과하지 않도록 가두기 (짤림 방지 유지)
-            const cw = canvas.width > 0 ? canvas.width : container.clientWidth;
-            const ch = canvas.height > 0 ? canvas.height : container.clientHeight;
-            
-            rawX = Math.max(0, Math.min(rawX, cw));
-            rawY = Math.max(0, Math.min(rawY, ch));
+            // 도면(Canvas) 안으로 좌표를 완벽하게 가둡니다 (짤림 방지)
+            x = Math.max(0, Math.min(x, canvas.width));
+            y = Math.max(0, Math.min(y, canvas.height));
 
-            return { x: rawX, y: rawY };
+            return { x, y };
         }
 
         function startPosition(e) {
             if (!isDrawingMode) return; 
-            const coords = getSafeRawCoords(e);
-            if (!coords) return; // 에러 방어
-            
             isDrawing = true; 
+            const coords = getEventLocation(e);
             const calc = getCalculatedPoint(coords.x, coords.y); 
             startX = calc.x; startY = calc.y;
         }
 
         function drawLine(e) {
             if (!isDrawing) return; 
-            e.preventDefault(); // 스크롤 방지
-            const coords = getSafeRawCoords(e);
-            if (!coords) return; 
-            
+            e.preventDefault(); 
+            const coords = getEventLocation(e);
             const calc = getCalculatedPoint(coords.x, coords.y, startX, startY); 
             let currentX = calc.x; let currentY = calc.y;
             
@@ -409,9 +404,7 @@
             if (!isDrawing) return; 
             isDrawing = false; 
             
-            const coords = getSafeRawCoords(e);
-            if (!coords) { redrawCanvas(); return; }
-            
+            const coords = getEventLocation(e);
             const calc = getCalculatedPoint(coords.x, coords.y, startX, startY); 
             let endX = calc.x; let endY = calc.y;
             
@@ -421,10 +414,12 @@
             redrawCanvas(); 
         }
 
-        canvas.addEventListener('mousedown', startPosition); canvas.addEventListener('mousemove', drawLine);
-        canvas.addEventListener('mouseup', stopPosition); canvas.addEventListener('mouseleave', stopPosition);
-        // passive: false 를 명시해야 모바일에서 스크롤 방지(preventDefault)가 완벽히 동작합니다.
-        canvas.addEventListener('touchstart', startPosition, {passive: false}); canvas.addEventListener('touchmove', drawLine, {passive: false});
+        canvas.addEventListener('mousedown', startPosition); 
+        canvas.addEventListener('mousemove', drawLine);
+        canvas.addEventListener('mouseup', stopPosition); 
+        canvas.addEventListener('mouseleave', stopPosition);
+        canvas.addEventListener('touchstart', startPosition, {passive: false}); 
+        canvas.addEventListener('touchmove', drawLine, {passive: false});
         canvas.addEventListener('touchend', stopPosition);
 
         function clearCanvas() { lines = []; redrawCanvas(); }
