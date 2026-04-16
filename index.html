@@ -61,7 +61,7 @@
             .layout-container { height: 600px; }
         }
 
-        /* --- A4 출력(인쇄) 최적화 --- */
+        /* --- A4 출력(인쇄) 침범 방지 완벽 최적화 --- */
         @media print {
             @page { size: A4 portrait; margin: 15mm; }
             body { background: white; margin: 0; padding: 0; }
@@ -70,21 +70,26 @@
             .main-content { display: block !important; width: 100% !important; max-width: 100% !important; flex: none !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
             
             #printTitle { display: block !important; text-align: center; font-size: 20pt; margin-bottom: 25px; font-weight: bold; color: black; }
-            
-            /* 인쇄 시 '현장 레이아웃' 텍스트 숨김 (도면만 깔끔하게) */
             #modeIndicator { display: none !important; }
             
-            /* 사각형 틀(border) 완전히 제거 및 중앙 배치 */
             .layout-container { 
                 width: 100% !important; 
                 max-width: 100% !important; 
                 box-sizing: border-box !important; 
-                border: none !important; /* 핵심: 테두리 삭제 */
+                border: none !important; 
                 background: transparent !important;
                 height: 400px !important; 
                 page-break-inside: avoid; 
-                margin: 0 auto 30px auto !important; /* 중앙 정렬 및 하단 여백 추가 */
-                overflow: visible !important; /* 선이 살짝 튀어나와도 안 짤리게 */
+                margin: 0 auto 30px auto !important; 
+                /* 오버플로우를 숨겨서 절대 다른 요소를 침범하지 못하게 함 */
+                overflow: hidden !important; 
+            }
+
+            /* 캔버스 자체가 출력 시 비율에 맞게 줄어들도록 강제 지정 */
+            .layout-container canvas {
+                width: 100% !important;
+                height: 100% !important;
+                object-fit: contain !important;
             }
 
             .print-table { display: table !important; width: 100% !important; max-width: 100% !important; table-layout: fixed !important; border-collapse: collapse; font-size: 9.5pt; word-break: keep-all; }
@@ -357,16 +362,31 @@
             return { x: currentX, y: currentY, guideX, guideY, isNodeSnapped };
         }
 
+        // --- 여기서부터 캔버스 영역 밖으로 나가지 못하게 제한(Clamp) 하는 함수 추가 ---
+        function getSafeRawCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            
+            // 핵심: 캔버스 크기(0 ~ width, 0 ~ height) 안에 좌표를 묶어둡니다.
+            rawX = Math.max(0, Math.min(rawX, canvas.width));
+            rawY = Math.max(0, Math.min(rawY, canvas.height));
+            
+            return { x: rawX, y: rawY };
+        }
+
         function startPosition(e) {
-            if (!isDrawingMode) return; isDrawing = true; const rect = canvas.getBoundingClientRect();
-            let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left; let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-            const calc = getCalculatedPoint(rawX, rawY); startX = calc.x; startY = calc.y;
+            if (!isDrawingMode) return; isDrawing = true; 
+            const coords = getSafeRawCoords(e);
+            const calc = getCalculatedPoint(coords.x, coords.y); 
+            startX = calc.x; startY = calc.y;
         }
 
         function drawLine(e) {
-            if (!isDrawing) return; e.preventDefault(); const rect = canvas.getBoundingClientRect();
-            let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left; let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-            const calc = getCalculatedPoint(rawX, rawY, startX, startY); let currentX = calc.x; let currentY = calc.y;
+            if (!isDrawing) return; e.preventDefault(); 
+            const coords = getSafeRawCoords(e);
+            const calc = getCalculatedPoint(coords.x, coords.y, startX, startY); 
+            let currentX = calc.x; let currentY = calc.y;
             redrawCanvas();
             ctx.setLineDash([5, 5]); ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 1;
             if (calc.guideX) { ctx.beginPath(); ctx.moveTo(calc.guideX.x, calc.guideX.y); ctx.lineTo(currentX, currentY); ctx.stroke(); }
@@ -377,9 +397,24 @@
         }
 
         function stopPosition(e) {
-            if (!isDrawing) return; isDrawing = false; const rect = canvas.getBoundingClientRect();
-            let rawX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX) - rect.left; let rawY = (e.changedTouches ? e.changedTouches[0].clientY : e.clientY) - rect.top;
-            const calc = getCalculatedPoint(rawX, rawY, startX, startY); let endX = calc.x; let endY = calc.y;
+            if (!isDrawing) return; isDrawing = false; 
+            // touchend, mouseup 등에서 좌표를 구할 때 안전하게 가져옴
+            const rect = canvas.getBoundingClientRect();
+            let rawX, rawY;
+            
+            if (e.changedTouches) {
+                rawX = e.changedTouches[0].clientX - rect.left;
+                rawY = e.changedTouches[0].clientY - rect.top;
+            } else {
+                rawX = e.clientX - rect.left;
+                rawY = e.clientY - rect.top;
+            }
+            
+            rawX = Math.max(0, Math.min(rawX, canvas.width));
+            rawY = Math.max(0, Math.min(rawY, canvas.height));
+
+            const calc = getCalculatedPoint(rawX, rawY, startX, startY); 
+            let endX = calc.x; let endY = calc.y;
             if (Math.abs(endX - startX) > 5 || Math.abs(endY - startY) > 5) { lines.push({ x1: startX, y1: startY, x2: endX, y2: endY }); }
             redrawCanvas(); 
         }
