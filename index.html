@@ -27,7 +27,7 @@
             cursor: move; display: flex; justify-content: center; align-items: center;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
             user-select: none;
-            transition: background-color 0.3s, clip-path 0.3s; /* 수정 시 부드러운 전환 */
+            transition: background-color 0.3s, clip-path 0.3s;
         }
 
         /* 입력 폼 */
@@ -48,7 +48,7 @@
         .btn-draw { background: #95a5a6; }
         .btn-print { background: var(--primary-color); width: auto; }
         .btn-group-row { display: flex; gap: 5px; } 
-        .btn-action { padding: 5px 8px; font-size: 11px; margin: 0; width: auto; } /* 수정/삭제 버튼 */
+        .btn-action { padding: 5px 8px; font-size: 11px; margin: 0; width: auto; }
         
         .status-list { margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; flex-grow: 1; overflow-y: auto; }
         .status-card { background: #f9f9f9; border-left: 5px solid #ccc; padding: 10px; margin-bottom: 8px; border-radius: 4px; font-size: 13px; line-height: 1.4; display: flex; justify-content: space-between; align-items: flex-start; }
@@ -219,15 +219,17 @@
         let startX, startY;
         let lines = []; 
         
-        // 데이터 상태 관리를 위한 변수들
         let hoodData = [];
-        let nextId = 1; // 고유 ID 부여용
-        let currentEditId = null; // 현재 수정 중인 항목의 ID
+        let nextId = 1; 
+        let currentEditId = null; 
 
+        // 캔버스 사이즈가 0이 되는 현상 원천 차단
         function resizeCanvas() {
-            canvas.width = container.clientWidth;
-            canvas.height = container.clientHeight;
-            redrawCanvas(); 
+            if (container.clientWidth > 0 && container.clientHeight > 0) {
+                canvas.width = container.clientWidth;
+                canvas.height = container.clientHeight;
+                redrawCanvas(); 
+            }
         }
         window.addEventListener('resize', resizeCanvas);
         setTimeout(resizeCanvas, 100);
@@ -304,7 +306,7 @@
             }
         }
 
-        // --- 그리기 로직 ---
+        // --- 도면 그리기 기능 ---
         function toggleDrawMode() {
             isDrawingMode = !isDrawingMode;
             document.getElementById('drawBtn').innerText = `도면 그리기 모드: ${isDrawingMode ? 'ON' : 'OFF'}`;
@@ -321,6 +323,7 @@
         function undoLastLine() { if (lines.length > 0) { lines.pop(); redrawCanvas(); } }
         document.addEventListener('keydown', function(event) { if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) { event.preventDefault(); undoLastLine(); } });
 
+        // 점선 가이드 생성용 수학 함수
         function getCalculatedPoint(rawX, rawY, originX, originY) {
             let currentX = rawX; let currentY = rawY;
             if (originX !== undefined && originY !== undefined) {
@@ -344,26 +347,55 @@
             return { x: currentX, y: currentY, guideX, guideY, isNodeSnapped };
         }
 
+        // 💡 [수정됨] 마우스/터치 좌표를 에러 없이 안전하게 추출하는 완벽한 로직
         function getSafeRawCoords(e) {
             const rect = canvas.getBoundingClientRect();
-            let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-            let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-            rawX = Math.max(0, Math.min(rawX, canvas.width)); rawY = Math.max(0, Math.min(rawY, canvas.height));
+            let clientX, clientY;
+
+            if (e.type.includes('touch')) {
+                // 터치 배열이 존재하는지 길이까지 완벽하게 체크 (에러 원천 차단)
+                const touch = (e.touches && e.touches.length > 0) ? e.touches[0] : 
+                              (e.changedTouches && e.changedTouches.length > 0) ? e.changedTouches[0] : null;
+                if (!touch) return null; // 유효한 터치 없으면 무시
+                clientX = touch.clientX;
+                clientY = touch.clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+
+            let rawX = clientX - rect.left;
+            let rawY = clientY - rect.top;
+
+            // 캔버스 크기를 초과하지 않도록 가두기 (짤림 방지 유지)
+            const cw = canvas.width > 0 ? canvas.width : container.clientWidth;
+            const ch = canvas.height > 0 ? canvas.height : container.clientHeight;
+            
+            rawX = Math.max(0, Math.min(rawX, cw));
+            rawY = Math.max(0, Math.min(rawY, ch));
+
             return { x: rawX, y: rawY };
         }
 
         function startPosition(e) {
-            if (!isDrawingMode) return; isDrawing = true; 
+            if (!isDrawingMode) return; 
             const coords = getSafeRawCoords(e);
+            if (!coords) return; // 에러 방어
+            
+            isDrawing = true; 
             const calc = getCalculatedPoint(coords.x, coords.y); 
             startX = calc.x; startY = calc.y;
         }
 
         function drawLine(e) {
-            if (!isDrawing) return; e.preventDefault(); 
+            if (!isDrawing) return; 
+            e.preventDefault(); // 스크롤 방지
             const coords = getSafeRawCoords(e);
+            if (!coords) return; 
+            
             const calc = getCalculatedPoint(coords.x, coords.y, startX, startY); 
             let currentX = calc.x; let currentY = calc.y;
+            
             redrawCanvas();
             ctx.setLineDash([5, 5]); ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 1;
             if (calc.guideX) { ctx.beginPath(); ctx.moveTo(calc.guideX.x, calc.guideX.y); ctx.lineTo(currentX, currentY); ctx.stroke(); }
@@ -374,25 +406,30 @@
         }
 
         function stopPosition(e) {
-            if (!isDrawing) return; isDrawing = false; 
-            const rect = canvas.getBoundingClientRect(); let rawX, rawY;
-            if (e.changedTouches) { rawX = e.changedTouches[0].clientX - rect.left; rawY = e.changedTouches[0].clientY - rect.top; } 
-            else { rawX = e.clientX - rect.left; rawY = e.clientY - rect.top; }
-            rawX = Math.max(0, Math.min(rawX, canvas.width)); rawY = Math.max(0, Math.min(rawY, canvas.height));
-            const calc = getCalculatedPoint(rawX, rawY, startX, startY); 
+            if (!isDrawing) return; 
+            isDrawing = false; 
+            
+            const coords = getSafeRawCoords(e);
+            if (!coords) { redrawCanvas(); return; }
+            
+            const calc = getCalculatedPoint(coords.x, coords.y, startX, startY); 
             let endX = calc.x; let endY = calc.y;
-            if (Math.abs(endX - startX) > 5 || Math.abs(endY - startY) > 5) { lines.push({ x1: startX, y1: startY, x2: endX, y2: endY }); }
+            
+            if (Math.abs(endX - startX) > 5 || Math.abs(endY - startY) > 5) { 
+                lines.push({ x1: startX, y1: startY, x2: endX, y2: endY }); 
+            }
             redrawCanvas(); 
         }
 
         canvas.addEventListener('mousedown', startPosition); canvas.addEventListener('mousemove', drawLine);
         canvas.addEventListener('mouseup', stopPosition); canvas.addEventListener('mouseleave', stopPosition);
+        // passive: false 를 명시해야 모바일에서 스크롤 방지(preventDefault)가 완벽히 동작합니다.
         canvas.addEventListener('touchstart', startPosition, {passive: false}); canvas.addEventListener('touchmove', drawLine, {passive: false});
         canvas.addEventListener('touchend', stopPosition);
 
         function clearCanvas() { lines = []; redrawCanvas(); }
 
-        // --- 추가된 기능: 폼 리셋 (취소) ---
+        // --- 마커 로직 ---
         function cancelEdit() {
             currentEditId = null;
             const btn = document.getElementById('saveBtn');
@@ -410,7 +447,6 @@
             document.getElementById('measuredVelocity').value = '';
         }
 
-        // --- 마커 드래그 부착 로직 (독립 함수로 분리) ---
         function addDragLogic(el) {
             el.ondragstart = function() { return false; }; 
             el.onmousedown = function(e) {
@@ -441,7 +477,6 @@
             };
         }
 
-        // --- 핵심 기능: 마커 추가 및 업데이트 ---
         function addHoodToLayout() {
             const processName = document.getElementById('processName').value;
             const areaStr = document.getElementById('hoodArea').value;
@@ -469,9 +504,7 @@
             if (typeValue === 'enclosed' || typeValue === 'booth') { requiredQ = A * legalVc * 60; } 
             else { requiredQ = legalVc * (10 * Math.pow(X, 2) + A) * 60; }
 
-            // 신규 추가 vs 기존 수정 분기처리
             if (currentEditId) {
-                // 수정 로직
                 const index = hoodData.findIndex(item => item.id === currentEditId);
                 if(index !== -1) {
                     hoodData[index] = {
@@ -489,7 +522,6 @@
                         result: isGood ? '양호' : '미흡'
                     };
                     
-                    // 기존 마커 디자인 업데이트 (위치는 그대로)
                     const marker = document.querySelector(`.hood-marker[data-id="${currentEditId}"]`);
                     if(marker) {
                         const bgColor = isGood ? '#3498db' : '#e74c3c';
@@ -508,11 +540,10 @@
                         marker.title = `[${processName}] Q: ${requiredQ.toFixed(2)} m³/min`;
                     }
                 }
-                cancelEdit(); // 폼 초기화 및 추가모드로 전환
+                cancelEdit(); 
             } else {
-                // 신규 추가 로직
                 const data = {
-                    id: nextId++, // 고유 ID 발급
+                    id: nextId++, 
                     process: processName,
                     stateVal: stateValue,
                     state: stateText,
@@ -529,7 +560,7 @@
 
                 const marker = document.createElement('div');
                 marker.className = 'hood-marker';
-                marker.setAttribute('data-id', data.id); // 마커와 데이터 연결
+                marker.setAttribute('data-id', data.id); 
                 
                 const bgColor = isGood ? '#3498db' : '#e74c3c';
                 if (typeValue === 'enclosed' || typeValue === 'booth') {
@@ -549,13 +580,12 @@
                 
                 addDragLogic(marker);
                 container.appendChild(marker);
-                cancelEdit(); // 폼 초기화
+                cancelEdit(); 
             }
             
             updateStatusList();
         }
 
-        // --- 추가된 기능: 수정 (Edit) ---
         function editHood(id) {
             const h = hoodData.find(item => item.id === id);
             if(!h) return;
@@ -563,9 +593,8 @@
             document.getElementById('processName').value = h.process;
             document.querySelector(`input[name="state"][value="${h.stateVal}"]`).checked = true;
             document.getElementById('hoodType').value = h.typeVal;
-            updateFormLogic(); // 유속 재세팅
+            updateFormLogic(); 
 
-            // 면적 직접 입력으로 세팅
             document.querySelector('input[name="areaType"][value="direct"]').checked = true;
             toggleAreaInputs();
             document.getElementById('hoodArea').value = h.area;
@@ -577,25 +606,20 @@
             }
             document.getElementById('measuredVelocity').value = h.measured;
 
-            // 저장 버튼을 수정 버튼으로 전환
             currentEditId = id;
             const btn = document.getElementById('saveBtn');
             btn.innerText = `[H${id}] 수정 완료 (위치 유지)`;
-            btn.style.backgroundColor = "#f39c12"; // 주황색으로 변경
+            btn.style.backgroundColor = "#f39c12"; 
         }
 
-        // --- 추가된 기능: 삭제 (Delete) ---
         function deleteHood(id) {
             if(!confirm(`H${id} 마커를 정말 삭제하시겠습니까?`)) return;
 
-            // 데이터 배열에서 삭제
             hoodData = hoodData.filter(h => h.id !== id);
             
-            // 돔(도면)에서 마커 삭제
             const marker = document.querySelector(`.hood-marker[data-id="${id}"]`);
             if(marker) marker.remove();
             
-            // 만약 현재 수정 중이던 항목을 삭제했다면 폼 초기화
             if(currentEditId === id) cancelEdit();
 
             updateStatusList();
@@ -609,7 +633,6 @@
             printBody.innerHTML = '';
 
             hoodData.forEach(h => {
-                // UI 사이드바에 수정/삭제 버튼 추가
                 const card = document.createElement('div');
                 card.className = 'status-card';
                 card.style.borderLeftColor = h.result === '양호' ? '#3498db' : '#e74c3c';
@@ -626,7 +649,6 @@
                 `;
                 list.appendChild(card);
 
-                // 출력용 표 업데이트 (출력시엔 버튼 안 보임)
                 const tr = `<tr>
                                 <td>${h.id}</td>
                                 <td>${h.process}</td>
