@@ -27,6 +27,7 @@
             cursor: move; display: flex; justify-content: center; align-items: center;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
             user-select: none;
+            transition: background-color 0.3s, clip-path 0.3s; /* 수정 시 부드러운 전환 */
         }
 
         /* 입력 폼 */
@@ -47,9 +48,10 @@
         .btn-draw { background: #95a5a6; }
         .btn-print { background: var(--primary-color); width: auto; }
         .btn-group-row { display: flex; gap: 5px; } 
+        .btn-action { padding: 5px 8px; font-size: 11px; margin: 0; width: auto; } /* 수정/삭제 버튼 */
         
         .status-list { margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; flex-grow: 1; overflow-y: auto; }
-        .status-card { background: #f9f9f9; border-left: 5px solid #ccc; padding: 10px; margin-bottom: 8px; border-radius: 4px; font-size: 13px; line-height: 1.4; }
+        .status-card { background: #f9f9f9; border-left: 5px solid #ccc; padding: 10px; margin-bottom: 8px; border-radius: 4px; font-size: 13px; line-height: 1.4; display: flex; justify-content: space-between; align-items: flex-start; }
 
         .copyright-sidebar { margin-top: 20px; padding-top: 15px; border-top: 1px dashed #ccc; text-align: center; font-size: 12px; color: #7f8c8d; }
         .copyright-print { display: none; }
@@ -61,89 +63,28 @@
             .layout-container { height: 600px; }
         }
 
-        /* --- A4 출력(인쇄) 여백 및 중앙 정렬 최적화 --- */
+        /* --- A4 출력(인쇄) 최적화 --- */
         @media print {
-            @page { 
-                size: A4 portrait; 
-                margin: 15mm; /* 기본 용지 여백 */
-            }
-            body { 
-                background: white; 
-                margin: 0; 
-                padding: 0; 
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-            }
+            @page { size: A4 portrait; margin: 15mm; }
+            body { background: white; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; }
             .container { display: block !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
             .sidebar, button, .header button { display: none !important; }
             
-            .main-content { 
-                display: flex !important;
-                flex-direction: column !important;
-                width: 100% !important; 
-                max-width: 100% !important; 
-                flex: none !important; 
-                box-shadow: none !important; 
-                border: none !important; 
-                padding: 0 !important; 
-                margin: 0 !important; 
-            }
+            .main-content { display: flex !important; flex-direction: column !important; width: 100% !important; max-width: 100% !important; flex: none !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
             
-            #printTitle { 
-                display: block !important; 
-                text-align: center; 
-                font-size: 20pt; 
-                margin: 10mm 0 15mm 0 !important; /* 상단 여백 조절 */
-                font-weight: bold; 
-                color: black; 
-            }
+            #printTitle { display: block !important; text-align: center; font-size: 20pt; margin: 10mm 0 15mm 0 !important; font-weight: bold; color: black; }
             #modeIndicator { display: none !important; }
             
-            /* 도면 영역 중앙 정렬 및 여백 최적화 */
-            .layout-container { 
-                width: 95% !important; /* 좌우 짤림 방지용 여백 확보 */
-                max-width: 95% !important; 
-                box-sizing: border-box !important; 
-                border: none !important; 
-                background: transparent !important;
-                height: 350px !important; /* 인쇄 시 도면 높이 적정 수준 고정 */
-                page-break-inside: avoid; 
-                margin: 0 auto 20mm auto !important; /* 상하 여백 및 중앙 정렬 */
-                overflow: hidden !important; 
-            }
+            .layout-container { width: 95% !important; max-width: 95% !important; box-sizing: border-box !important; border: none !important; background: transparent !important; height: 350px !important; page-break-inside: avoid; margin: 0 auto 20mm auto !important; overflow: hidden !important; }
+            .layout-container canvas { width: 100% !important; height: 100% !important; object-fit: contain !important; }
 
-            .layout-container canvas {
-                width: 100% !important;
-                height: 100% !important;
-                object-fit: contain !important;
-            }
-
-            .print-table { 
-                display: table !important; 
-                width: 100% !important; 
-                max-width: 100% !important; 
-                table-layout: fixed !important; 
-                border-collapse: collapse; 
-                font-size: 9pt; 
-                word-break: keep-all; 
-                margin-top: 10mm;
-            }
+            .print-table { display: table !important; width: 100% !important; max-width: 100% !important; table-layout: fixed !important; border-collapse: collapse; font-size: 9pt; word-break: keep-all; margin-top: 10mm; }
             .print-table thead { display: table-header-group; } 
             .print-table tr { page-break-inside: avoid; } 
             .print-table th { background-color: #f2f2f2 !important; }
             .print-table th, .print-table td { border: 1px solid #000; padding: 6px; text-align: center; }
             
-            .copyright-print { 
-                display: block; 
-                margin-top: 20mm; 
-                text-align: center; 
-                font-size: 9pt; 
-                color: #333; 
-                border-top: 1px solid #000; 
-                padding-top: 5mm; 
-                page-break-inside: avoid; 
-            }
+            .copyright-print { display: block; margin-top: 20mm; text-align: center; font-size: 9pt; color: #333; border-top: 1px solid #000; padding-top: 5mm; page-break-inside: avoid; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
         .print-table, #printTitle { display: none; }
@@ -221,11 +162,11 @@
                 <input type="number" id="measuredVelocity" step="0.01" placeholder="실제 측정한 풍속 입력">
             </div>
 
-            <button onclick="addHoodToLayout()" style="margin-bottom: 5px;">도면에 배치 및 저장</button>
+            <button id="saveBtn" onclick="addHoodToLayout()" style="margin-bottom: 5px;">도면에 배치 및 저장</button>
             <button class="btn-draw" onclick="toggleDrawMode()" id="drawBtn">도면 그리기 모드: OFF</button>
             
             <div class="btn-group-row">
-                <button class="btn-draw" style="background:#f39c12" onclick="undoLastLine()" title="단축키: Ctrl + Z">실행 취소</button>
+                <button class="btn-draw" style="background:#f39c12" onclick="undoLastLine()" title="단축키: Ctrl + Z">선 지우기</button>
                 <button class="btn-draw" style="background:#e74c3c" onclick="clearCanvas()">도면 초기화</button>
             </div>
 
@@ -277,8 +218,11 @@
         let isDrawing = false;
         let startX, startY;
         let lines = []; 
+        
+        // 데이터 상태 관리를 위한 변수들
         let hoodData = [];
-        const SNAP_RADIUS = 20;
+        let nextId = 1; // 고유 ID 부여용
+        let currentEditId = null; // 현재 수정 중인 항목의 ID
 
         function resizeCanvas() {
             canvas.width = container.clientWidth;
@@ -321,7 +265,7 @@
                 rectInputs.style.display = 'none';
                 circleInputs.style.display = 'none';
                 hoodArea.readOnly = false;
-                hoodArea.placeholder = "최종 개구면적 (m²)";
+                if(!currentEditId) hoodArea.placeholder = "최종 개구면적 (m²)";
             } else if (type === 'rect') {
                 rectInputs.style.display = 'flex';
                 circleInputs.style.display = 'none';
@@ -360,6 +304,7 @@
             }
         }
 
+        // --- 그리기 로직 ---
         function toggleDrawMode() {
             isDrawingMode = !isDrawingMode;
             document.getElementById('drawBtn').innerText = `도면 그리기 모드: ${isDrawingMode ? 'ON' : 'OFF'}`;
@@ -369,20 +314,12 @@
 
         function redrawCanvas() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = '#2c3e50';
-            ctx.lineWidth = 3;
-            ctx.lineCap = 'round';
-            ctx.setLineDash([]); 
-            lines.forEach(line => {
-                ctx.beginPath(); ctx.moveTo(line.x1, line.y1); ctx.lineTo(line.x2, line.y2); ctx.stroke();
-            });
+            ctx.strokeStyle = '#2c3e50'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.setLineDash([]); 
+            lines.forEach(line => { ctx.beginPath(); ctx.moveTo(line.x1, line.y1); ctx.lineTo(line.x2, line.y2); ctx.stroke(); });
         }
 
         function undoLastLine() { if (lines.length > 0) { lines.pop(); redrawCanvas(); } }
-
-        document.addEventListener('keydown', function(event) {
-            if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) { event.preventDefault(); undoLastLine(); }
-        });
+        document.addEventListener('keydown', function(event) { if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) { event.preventDefault(); undoLastLine(); } });
 
         function getCalculatedPoint(rawX, rawY, originX, originY) {
             let currentX = rawX; let currentY = rawY;
@@ -411,8 +348,7 @@
             const rect = canvas.getBoundingClientRect();
             let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
             let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-            rawX = Math.max(0, Math.min(rawX, canvas.width));
-            rawY = Math.max(0, Math.min(rawY, canvas.height));
+            rawX = Math.max(0, Math.min(rawX, canvas.width)); rawY = Math.max(0, Math.min(rawY, canvas.height));
             return { x: rawX, y: rawY };
         }
 
@@ -439,17 +375,10 @@
 
         function stopPosition(e) {
             if (!isDrawing) return; isDrawing = false; 
-            const rect = canvas.getBoundingClientRect();
-            let rawX, rawY;
-            if (e.changedTouches) {
-                rawX = e.changedTouches[0].clientX - rect.left;
-                rawY = e.changedTouches[0].clientY - rect.top;
-            } else {
-                rawX = e.clientX - rect.left;
-                rawY = e.clientY - rect.top;
-            }
-            rawX = Math.max(0, Math.min(rawX, canvas.width));
-            rawY = Math.max(0, Math.min(rawY, canvas.height));
+            const rect = canvas.getBoundingClientRect(); let rawX, rawY;
+            if (e.changedTouches) { rawX = e.changedTouches[0].clientX - rect.left; rawY = e.changedTouches[0].clientY - rect.top; } 
+            else { rawX = e.clientX - rect.left; rawY = e.clientY - rect.top; }
+            rawX = Math.max(0, Math.min(rawX, canvas.width)); rawY = Math.max(0, Math.min(rawY, canvas.height));
             const calc = getCalculatedPoint(rawX, rawY, startX, startY); 
             let endX = calc.x; let endY = calc.y;
             if (Math.abs(endX - startX) > 5 || Math.abs(endY - startY) > 5) { lines.push({ x1: startX, y1: startY, x2: endX, y2: endY }); }
@@ -463,6 +392,56 @@
 
         function clearCanvas() { lines = []; redrawCanvas(); }
 
+        // --- 추가된 기능: 폼 리셋 (취소) ---
+        function cancelEdit() {
+            currentEditId = null;
+            const btn = document.getElementById('saveBtn');
+            btn.innerText = "도면에 배치 및 저장";
+            btn.style.backgroundColor = "var(--accent-color)";
+            
+            document.getElementById('processName').value = '';
+            document.getElementById('rectW').value = '';
+            document.getElementById('rectH').value = '';
+            document.getElementById('circleD').value = '';
+            document.getElementById('hoodArea').value = '';
+            
+            const type = document.getElementById('hoodType').value;
+            if(type !== 'enclosed' && type !== 'booth') document.getElementById('hoodDistance').value = '';
+            document.getElementById('measuredVelocity').value = '';
+        }
+
+        // --- 마커 드래그 부착 로직 (독립 함수로 분리) ---
+        function addDragLogic(el) {
+            el.ondragstart = function() { return false; }; 
+            el.onmousedown = function(e) {
+                if(isDrawingMode) return;
+                e.preventDefault(); 
+                let shiftX = e.clientX - el.getBoundingClientRect().left;
+                let shiftY = e.clientY - el.getBoundingClientRect().top;
+                function moveAt(pageX, pageY) {
+                    el.style.left = pageX - container.getBoundingClientRect().left - shiftX + 'px';
+                    el.style.top = pageY - container.getBoundingClientRect().top - shiftY + 'px';
+                }
+                function onMouseMove(e) { moveAt(e.clientX, e.clientY); }
+                document.addEventListener('mousemove', onMouseMove);
+                document.onmouseup = function() { document.removeEventListener('mousemove', onMouseMove); document.onmouseup = null; };
+            };
+            el.ontouchstart = function(e) {
+                if(isDrawingMode) return;
+                const touch = e.touches[0];
+                let shiftX = touch.clientX - el.getBoundingClientRect().left;
+                let shiftY = touch.clientY - el.getBoundingClientRect().top;
+                function moveAt(pageX, pageY) {
+                    el.style.left = pageX - container.getBoundingClientRect().left - shiftX + 'px';
+                    el.style.top = pageY - container.getBoundingClientRect().top - shiftY + 'px';
+                }
+                function onTouchMove(e) { e.preventDefault(); moveAt(e.touches[0].clientX, e.touches[0].clientY); }
+                document.addEventListener('touchmove', onTouchMove, {passive: false});
+                document.ontouchend = function() { document.removeEventListener('touchmove', onTouchMove); document.ontouchend = null; };
+            };
+        }
+
+        // --- 핵심 기능: 마커 추가 및 업데이트 ---
         function addHoodToLayout() {
             const processName = document.getElementById('processName').value;
             const areaStr = document.getElementById('hoodArea').value;
@@ -476,7 +455,8 @@
             if (typeValue !== 'enclosed' && typeValue !== 'booth' && !distStr) { alert("외부식의 경우 오염원 거리(X)를 입력해야 합니다."); return; }
             if (!measuredStr) { alert("측정 유속을 입력해주세요."); return; }
 
-            const state = document.querySelector('input[name="state"]:checked').value;
+            const stateValue = document.querySelector('input[name="state"]:checked').value;
+            const stateText = stateValue === 'gaseous' ? '가스상' : '입자상';
             const typeText = typeSelect.options[typeSelect.selectedIndex].text.split(' (')[0]; 
             
             const A = parseFloat(areaStr);
@@ -486,104 +466,167 @@
             const isGood = measuredVc >= legalVc;
 
             let requiredQ = 0;
-            if (typeValue === 'enclosed' || typeValue === 'booth') {
-                requiredQ = A * legalVc * 60;
-            } else {
-                requiredQ = legalVc * (10 * Math.pow(X, 2) + A) * 60;
-            }
+            if (typeValue === 'enclosed' || typeValue === 'booth') { requiredQ = A * legalVc * 60; } 
+            else { requiredQ = legalVc * (10 * Math.pow(X, 2) + A) * 60; }
 
-            const data = {
-                id: hoodData.length + 1,
-                process: processName,
-                state: state === 'gaseous' ? '가스상' : '입자상',
-                type: typeText,
-                legal: legalVc.toFixed(1),
-                measured: measuredVc.toFixed(1),
-                qValue: requiredQ.toFixed(2), 
-                result: isGood ? '양호' : '미흡'
-            };
-            hoodData.push(data);
-
-            const marker = document.createElement('div');
-            marker.className = 'hood-marker';
-            const bgColor = isGood ? '#3498db' : '#e74c3c';
-            if (typeValue === 'enclosed' || typeValue === 'booth') {
-                marker.style.width = '40px'; marker.style.height = '40px';
-                marker.style.backgroundColor = bgColor; marker.style.borderRadius = '4px';
-                marker.innerText = `H${data.id}`;
+            // 신규 추가 vs 기존 수정 분기처리
+            if (currentEditId) {
+                // 수정 로직
+                const index = hoodData.findIndex(item => item.id === currentEditId);
+                if(index !== -1) {
+                    hoodData[index] = {
+                        id: currentEditId,
+                        process: processName,
+                        stateVal: stateValue,
+                        state: stateText,
+                        typeVal: typeValue,
+                        type: typeText,
+                        area: A,
+                        distance: X,
+                        legal: legalVc.toFixed(1),
+                        measured: measuredVc.toFixed(1),
+                        qValue: requiredQ.toFixed(2), 
+                        result: isGood ? '양호' : '미흡'
+                    };
+                    
+                    // 기존 마커 디자인 업데이트 (위치는 그대로)
+                    const marker = document.querySelector(`.hood-marker[data-id="${currentEditId}"]`);
+                    if(marker) {
+                        const bgColor = isGood ? '#3498db' : '#e74c3c';
+                        if (typeValue === 'enclosed' || typeValue === 'booth') {
+                            marker.style.clipPath = 'none';
+                            marker.style.width = '40px'; marker.style.height = '40px';
+                            marker.style.backgroundColor = bgColor; marker.style.borderRadius = '4px';
+                            marker.style.alignItems = 'center'; marker.style.paddingBottom = '0';
+                        } else {
+                            marker.style.borderRadius = '0';
+                            marker.style.width = '45px'; marker.style.height = '40px';
+                            marker.style.backgroundColor = bgColor;
+                            marker.style.clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)'; 
+                            marker.style.alignItems = 'flex-end'; marker.style.paddingBottom = '5px';
+                        }
+                        marker.title = `[${processName}] Q: ${requiredQ.toFixed(2)} m³/min`;
+                    }
+                }
+                cancelEdit(); // 폼 초기화 및 추가모드로 전환
             } else {
-                marker.style.width = '45px'; marker.style.height = '40px';
-                marker.style.backgroundColor = bgColor;
-                marker.style.clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)'; 
-                marker.style.alignItems = 'flex-end'; marker.style.paddingBottom = '5px';
-                marker.innerText = `H${data.id}`;
+                // 신규 추가 로직
+                const data = {
+                    id: nextId++, // 고유 ID 발급
+                    process: processName,
+                    stateVal: stateValue,
+                    state: stateText,
+                    typeVal: typeValue,
+                    type: typeText,
+                    area: A,
+                    distance: X,
+                    legal: legalVc.toFixed(1),
+                    measured: measuredVc.toFixed(1),
+                    qValue: requiredQ.toFixed(2), 
+                    result: isGood ? '양호' : '미흡'
+                };
+                hoodData.push(data);
+
+                const marker = document.createElement('div');
+                marker.className = 'hood-marker';
+                marker.setAttribute('data-id', data.id); // 마커와 데이터 연결
+                
+                const bgColor = isGood ? '#3498db' : '#e74c3c';
+                if (typeValue === 'enclosed' || typeValue === 'booth') {
+                    marker.style.width = '40px'; marker.style.height = '40px';
+                    marker.style.backgroundColor = bgColor; marker.style.borderRadius = '4px';
+                    marker.innerText = `H${data.id}`;
+                } else {
+                    marker.style.width = '45px'; marker.style.height = '40px';
+                    marker.style.backgroundColor = bgColor;
+                    marker.style.clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)'; 
+                    marker.style.alignItems = 'flex-end'; marker.style.paddingBottom = '5px';
+                    marker.innerText = `H${data.id}`;
+                }
+
+                marker.style.left = '50%'; marker.style.top = '50%';
+                marker.title = `[${data.process}] Q: ${data.qValue} m³/min`;
+                
+                addDragLogic(marker);
+                container.appendChild(marker);
+                cancelEdit(); // 폼 초기화
             }
-            marker.style.left = '50%'; marker.style.top = '50%';
-            marker.title = `[${data.process}] Q: ${data.qValue} m³/min`;
             
-            function addDragLogic(el) {
-                el.ondragstart = function() { return false; }; 
-                el.onmousedown = function(e) {
-                    if(isDrawingMode) return;
-                    e.preventDefault(); 
-                    let shiftX = e.clientX - el.getBoundingClientRect().left;
-                    let shiftY = e.clientY - el.getBoundingClientRect().top;
-                    function moveAt(pageX, pageY) {
-                        el.style.left = pageX - container.getBoundingClientRect().left - shiftX + 'px';
-                        el.style.top = pageY - container.getBoundingClientRect().top - shiftY + 'px';
-                    }
-                    function onMouseMove(e) { moveAt(e.clientX, e.clientY); }
-                    document.addEventListener('mousemove', onMouseMove);
-                    document.onmouseup = function() { 
-                        document.removeEventListener('mousemove', onMouseMove);
-                        document.onmouseup = null; 
-                    };
-                };
-                el.ontouchstart = function(e) {
-                    if(isDrawingMode) return;
-                    const touch = e.touches[0];
-                    let shiftX = touch.clientX - el.getBoundingClientRect().left;
-                    let shiftY = touch.clientY - el.getBoundingClientRect().top;
-                    function moveAt(pageX, pageY) {
-                        el.style.left = pageX - container.getBoundingClientRect().left - shiftX + 'px';
-                        el.style.top = pageY - container.getBoundingClientRect().top - shiftY + 'px';
-                    }
-                    function onTouchMove(e) { 
-                        e.preventDefault(); 
-                        moveAt(e.touches[0].clientX, e.touches[0].clientY); 
-                    }
-                    document.addEventListener('touchmove', onTouchMove, {passive: false});
-                    document.ontouchend = function() { 
-                        document.removeEventListener('touchmove', onTouchMove);
-                        document.ontouchend = null;
-                    };
-                };
-            }
-            addDragLogic(marker);
-            container.appendChild(marker);
             updateStatusList();
-            document.getElementById('processName').value = '';
-            document.getElementById('rectW').value = '';
-            document.getElementById('rectH').value = '';
-            document.getElementById('circleD').value = '';
-            document.getElementById('hoodArea').value = '';
-            if(typeValue !== 'enclosed' && typeValue !== 'booth') document.getElementById('hoodDistance').value = '';
-            document.getElementById('measuredVelocity').value = '';
+        }
+
+        // --- 추가된 기능: 수정 (Edit) ---
+        function editHood(id) {
+            const h = hoodData.find(item => item.id === id);
+            if(!h) return;
+
+            document.getElementById('processName').value = h.process;
+            document.querySelector(`input[name="state"][value="${h.stateVal}"]`).checked = true;
+            document.getElementById('hoodType').value = h.typeVal;
+            updateFormLogic(); // 유속 재세팅
+
+            // 면적 직접 입력으로 세팅
+            document.querySelector('input[name="areaType"][value="direct"]').checked = true;
+            toggleAreaInputs();
+            document.getElementById('hoodArea').value = h.area;
+
+            if(h.typeVal !== 'enclosed' && h.typeVal !== 'booth') {
+                document.getElementById('hoodDistance').value = h.distance;
+            } else {
+                document.getElementById('hoodDistance').value = '';
+            }
+            document.getElementById('measuredVelocity').value = h.measured;
+
+            // 저장 버튼을 수정 버튼으로 전환
+            currentEditId = id;
+            const btn = document.getElementById('saveBtn');
+            btn.innerText = `[H${id}] 수정 완료 (위치 유지)`;
+            btn.style.backgroundColor = "#f39c12"; // 주황색으로 변경
+        }
+
+        // --- 추가된 기능: 삭제 (Delete) ---
+        function deleteHood(id) {
+            if(!confirm(`H${id} 마커를 정말 삭제하시겠습니까?`)) return;
+
+            // 데이터 배열에서 삭제
+            hoodData = hoodData.filter(h => h.id !== id);
+            
+            // 돔(도면)에서 마커 삭제
+            const marker = document.querySelector(`.hood-marker[data-id="${id}"]`);
+            if(marker) marker.remove();
+            
+            // 만약 현재 수정 중이던 항목을 삭제했다면 폼 초기화
+            if(currentEditId === id) cancelEdit();
+
+            updateStatusList();
         }
 
         function updateStatusList() {
             const list = document.getElementById('statusList');
             const printBody = document.getElementById('printBody');
+            
             list.innerHTML = '<strong>현장 모니터링 및 배기량 목록</strong>';
             printBody.innerHTML = '';
+
             hoodData.forEach(h => {
+                // UI 사이드바에 수정/삭제 버튼 추가
                 const card = document.createElement('div');
                 card.className = 'status-card';
                 card.style.borderLeftColor = h.result === '양호' ? '#3498db' : '#e74c3c';
-                card.innerHTML = `[${h.id}] <strong>${h.process}</strong> / ${h.type} <br> 
-                                  ▶ 풍속: 측정 <b>${h.measured}</b> (법적 ${h.legal}) -> <b style="color:${h.result === '양호' ? '#3498db' : '#e74c3c'}">${h.result}</b><br>
-                                  ▶ 필요 배기량: <b>${h.qValue}</b> m³/min`;
+                card.innerHTML = `
+                    <div>
+                        [H${h.id}] <strong>${h.process}</strong> / ${h.type} <br> 
+                        ▶ 풍속: 측정 <b>${h.measured}</b> (법적 ${h.legal}) -> <b style="color:${h.result === '양호' ? '#3498db' : '#e74c3c'}">${h.result}</b><br>
+                        ▶ 배기량: <b>${h.qValue}</b> m³/min
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:5px; margin-left:5px;">
+                        <button class="btn-action" style="background:#f39c12; color:white; border:none; cursor:pointer; border-radius:3px;" onclick="editHood(${h.id})">수정</button>
+                        <button class="btn-action" style="background:#e74c3c; color:white; border:none; cursor:pointer; border-radius:3px;" onclick="deleteHood(${h.id})">삭제</button>
+                    </div>
+                `;
                 list.appendChild(card);
+
+                // 출력용 표 업데이트 (출력시엔 버튼 안 보임)
                 const tr = `<tr>
                                 <td>${h.id}</td>
                                 <td>${h.process}</td>
