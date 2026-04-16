@@ -61,44 +61,89 @@
             .layout-container { height: 600px; }
         }
 
-        /* --- A4 출력(인쇄) 침범 방지 완벽 최적화 --- */
+        /* --- A4 출력(인쇄) 여백 및 중앙 정렬 최적화 --- */
         @media print {
-            @page { size: A4 portrait; margin: 15mm; }
-            body { background: white; margin: 0; padding: 0; }
+            @page { 
+                size: A4 portrait; 
+                margin: 15mm; /* 기본 용지 여백 */
+            }
+            body { 
+                background: white; 
+                margin: 0; 
+                padding: 0; 
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
             .container { display: block !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
             .sidebar, button, .header button { display: none !important; }
-            .main-content { display: block !important; width: 100% !important; max-width: 100% !important; flex: none !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
             
-            #printTitle { display: block !important; text-align: center; font-size: 20pt; margin-bottom: 25px; font-weight: bold; color: black; }
-            #modeIndicator { display: none !important; }
-            
-            .layout-container { 
+            .main-content { 
+                display: flex !important;
+                flex-direction: column !important;
                 width: 100% !important; 
                 max-width: 100% !important; 
+                flex: none !important; 
+                box-shadow: none !important; 
+                border: none !important; 
+                padding: 0 !important; 
+                margin: 0 !important; 
+            }
+            
+            #printTitle { 
+                display: block !important; 
+                text-align: center; 
+                font-size: 20pt; 
+                margin: 10mm 0 15mm 0 !important; /* 상단 여백 조절 */
+                font-weight: bold; 
+                color: black; 
+            }
+            #modeIndicator { display: none !important; }
+            
+            /* 도면 영역 중앙 정렬 및 여백 최적화 */
+            .layout-container { 
+                width: 95% !important; /* 좌우 짤림 방지용 여백 확보 */
+                max-width: 95% !important; 
                 box-sizing: border-box !important; 
                 border: none !important; 
                 background: transparent !important;
-                height: 400px !important; 
+                height: 350px !important; /* 인쇄 시 도면 높이 적정 수준 고정 */
                 page-break-inside: avoid; 
-                margin: 0 auto 30px auto !important; 
-                /* 오버플로우를 숨겨서 절대 다른 요소를 침범하지 못하게 함 */
+                margin: 0 auto 20mm auto !important; /* 상하 여백 및 중앙 정렬 */
                 overflow: hidden !important; 
             }
 
-            /* 캔버스 자체가 출력 시 비율에 맞게 줄어들도록 강제 지정 */
             .layout-container canvas {
                 width: 100% !important;
                 height: 100% !important;
                 object-fit: contain !important;
             }
 
-            .print-table { display: table !important; width: 100% !important; max-width: 100% !important; table-layout: fixed !important; border-collapse: collapse; font-size: 9.5pt; word-break: keep-all; }
+            .print-table { 
+                display: table !important; 
+                width: 100% !important; 
+                max-width: 100% !important; 
+                table-layout: fixed !important; 
+                border-collapse: collapse; 
+                font-size: 9pt; 
+                word-break: keep-all; 
+                margin-top: 10mm;
+            }
             .print-table thead { display: table-header-group; } 
             .print-table tr { page-break-inside: avoid; } 
             .print-table th { background-color: #f2f2f2 !important; }
             .print-table th, .print-table td { border: 1px solid #000; padding: 6px; text-align: center; }
             
-            .copyright-print { display: block; margin-top: 30px; text-align: center; font-size: 9pt; color: #333; border-top: 1px solid #000; padding-top: 10px; page-break-inside: avoid; }
+            .copyright-print { 
+                display: block; 
+                margin-top: 20mm; 
+                text-align: center; 
+                font-size: 9pt; 
+                color: #333; 
+                border-top: 1px solid #000; 
+                padding-top: 5mm; 
+                page-break-inside: avoid; 
+            }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
         .print-table, #printTitle { display: none; }
@@ -362,16 +407,12 @@
             return { x: currentX, y: currentY, guideX, guideY, isNodeSnapped };
         }
 
-        // --- 여기서부터 캔버스 영역 밖으로 나가지 못하게 제한(Clamp) 하는 함수 추가 ---
         function getSafeRawCoords(e) {
             const rect = canvas.getBoundingClientRect();
             let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
             let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-            
-            // 핵심: 캔버스 크기(0 ~ width, 0 ~ height) 안에 좌표를 묶어둡니다.
             rawX = Math.max(0, Math.min(rawX, canvas.width));
             rawY = Math.max(0, Math.min(rawY, canvas.height));
-            
             return { x: rawX, y: rawY };
         }
 
@@ -398,10 +439,8 @@
 
         function stopPosition(e) {
             if (!isDrawing) return; isDrawing = false; 
-            // touchend, mouseup 등에서 좌표를 구할 때 안전하게 가져옴
             const rect = canvas.getBoundingClientRect();
             let rawX, rawY;
-            
             if (e.changedTouches) {
                 rawX = e.changedTouches[0].clientX - rect.left;
                 rawY = e.changedTouches[0].clientY - rect.top;
@@ -409,10 +448,8 @@
                 rawX = e.clientX - rect.left;
                 rawY = e.clientY - rect.top;
             }
-            
             rawX = Math.max(0, Math.min(rawX, canvas.width));
             rawY = Math.max(0, Math.min(rawY, canvas.height));
-
             const calc = getCalculatedPoint(rawX, rawY, startX, startY); 
             let endX = calc.x; let endY = calc.y;
             if (Math.abs(endX - startX) > 5 || Math.abs(endY - startY) > 5) { lines.push({ x1: startX, y1: startY, x2: endX, y2: endY }); }
@@ -469,9 +506,7 @@
 
             const marker = document.createElement('div');
             marker.className = 'hood-marker';
-            
             const bgColor = isGood ? '#3498db' : '#e74c3c';
-            
             if (typeValue === 'enclosed' || typeValue === 'booth') {
                 marker.style.width = '40px'; marker.style.height = '40px';
                 marker.style.backgroundColor = bgColor; marker.style.borderRadius = '4px';
@@ -483,63 +518,50 @@
                 marker.style.alignItems = 'flex-end'; marker.style.paddingBottom = '5px';
                 marker.innerText = `H${data.id}`;
             }
-
             marker.style.left = '50%'; marker.style.top = '50%';
             marker.title = `[${data.process}] Q: ${data.qValue} m³/min`;
             
             function addDragLogic(el) {
                 el.ondragstart = function() { return false; }; 
-
                 el.onmousedown = function(e) {
                     if(isDrawingMode) return;
                     e.preventDefault(); 
                     let shiftX = e.clientX - el.getBoundingClientRect().left;
                     let shiftY = e.clientY - el.getBoundingClientRect().top;
-
                     function moveAt(pageX, pageY) {
                         el.style.left = pageX - container.getBoundingClientRect().left - shiftX + 'px';
                         el.style.top = pageY - container.getBoundingClientRect().top - shiftY + 'px';
                     }
-
                     function onMouseMove(e) { moveAt(e.clientX, e.clientY); }
-
                     document.addEventListener('mousemove', onMouseMove);
-                    
                     document.onmouseup = function() { 
                         document.removeEventListener('mousemove', onMouseMove);
                         document.onmouseup = null; 
                     };
                 };
-
                 el.ontouchstart = function(e) {
                     if(isDrawingMode) return;
                     const touch = e.touches[0];
                     let shiftX = touch.clientX - el.getBoundingClientRect().left;
                     let shiftY = touch.clientY - el.getBoundingClientRect().top;
-
                     function moveAt(pageX, pageY) {
                         el.style.left = pageX - container.getBoundingClientRect().left - shiftX + 'px';
                         el.style.top = pageY - container.getBoundingClientRect().top - shiftY + 'px';
                     }
-
                     function onTouchMove(e) { 
                         e.preventDefault(); 
                         moveAt(e.touches[0].clientX, e.touches[0].clientY); 
                     }
-
                     document.addEventListener('touchmove', onTouchMove, {passive: false});
-                    
                     document.ontouchend = function() { 
                         document.removeEventListener('touchmove', onTouchMove);
                         document.ontouchend = null;
                     };
                 };
             }
-            
             addDragLogic(marker);
             container.appendChild(marker);
             updateStatusList();
-            
             document.getElementById('processName').value = '';
             document.getElementById('rectW').value = '';
             document.getElementById('rectH').value = '';
@@ -552,10 +574,8 @@
         function updateStatusList() {
             const list = document.getElementById('statusList');
             const printBody = document.getElementById('printBody');
-            
             list.innerHTML = '<strong>현장 모니터링 및 배기량 목록</strong>';
             printBody.innerHTML = '';
-
             hoodData.forEach(h => {
                 const card = document.createElement('div');
                 card.className = 'status-card';
@@ -564,7 +584,6 @@
                                   ▶ 풍속: 측정 <b>${h.measured}</b> (법적 ${h.legal}) -> <b style="color:${h.result === '양호' ? '#3498db' : '#e74c3c'}">${h.result}</b><br>
                                   ▶ 필요 배기량: <b>${h.qValue}</b> m³/min`;
                 list.appendChild(card);
-
                 const tr = `<tr>
                                 <td>${h.id}</td>
                                 <td>${h.process}</td>
