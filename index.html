@@ -40,6 +40,7 @@
         button { background: var(--accent-color); color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 5px; }
         .btn-draw { background: #95a5a6; }
         .btn-print { background: var(--primary-color); width: auto; }
+        .btn-group-row { display: flex; gap: 5px; } /* 버튼 나란히 배치용 */
         
         .status-list { margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; flex-grow: 1; overflow-y: auto; }
         .status-card { background: #f9f9f9; border-left: 5px solid #ccc; padding: 10px; margin-bottom: 8px; border-radius: 4px; font-size: 13px; }
@@ -136,9 +137,13 @@
                 </div>
             </div>
 
-            <button onclick="addHoodToLayout()">도면에 배치 및 저장</button>
+            <button onclick="addHoodToLayout()" style="margin-bottom: 5px;">도면에 배치 및 저장</button>
             <button class="btn-draw" onclick="toggleDrawMode()" id="drawBtn">도면 그리기 모드: OFF</button>
-            <button class="btn-draw" style="background:#e67e22" onclick="clearCanvas()">도면 초기화</button>
+            
+            <div class="btn-group-row">
+                <button class="btn-draw" style="background:#f39c12" onclick="undoLastLine()" title="단축키: Ctrl + Z">실행 취소</button>
+                <button class="btn-draw" style="background:#e74c3c" onclick="clearCanvas()">도면 초기화</button>
+            </div>
 
             <div class="status-list" id="statusList">
                 <strong>현장 모니터링 목록</strong>
@@ -232,7 +237,7 @@
             ctx.strokeStyle = '#2c3e50';
             ctx.lineWidth = 3;
             ctx.lineCap = 'round';
-            ctx.setLineDash([]); // 기본 실선 유지
+            ctx.setLineDash([]); 
             
             lines.forEach(line => {
                 ctx.beginPath();
@@ -242,12 +247,28 @@
             });
         }
 
+        // --- 실행 취소(Undo) 로직 ---
+        function undoLastLine() {
+            if (lines.length > 0) {
+                lines.pop(); // 배열의 가장 마지막 선을 제거
+                redrawCanvas(); // 제거된 상태로 도면 다시 그리기
+            }
+        }
+
+        // --- 키보드 단축키 이벤트 (Ctrl+Z) ---
+        document.addEventListener('keydown', function(event) {
+            // isDrawingMode가 켜져있거나 캔버스 영역 안에서 작업 중일 때 작동
+            if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) {
+                event.preventDefault(); // 브라우저 기본 되돌리기 방지
+                undoLastLine();
+            }
+        });
+
         // --- 스마트 점선 가이드 및 스냅 계산 로직 ---
         function getCalculatedPoint(rawX, rawY, originX, originY) {
             let currentX = rawX;
             let currentY = rawY;
 
-            // 1. 선 그리기 중일 때: 직각 보정 (가로/세로 강제)
             if (originX !== undefined && originY !== undefined) {
                 let diffX = Math.abs(rawX - originX);
                 let diffY = Math.abs(rawY - originY);
@@ -255,7 +276,6 @@
                 else if (diffY > diffX * 2.5) { currentX = originX; }
             }
 
-            // 2. 스마트 가이드라인 및 노드 스냅 찾기
             let bestNode = null;
             let bestGuideX = null;
             let bestGuideY = null;
@@ -266,18 +286,15 @@
             for (let line of lines) {
                 const points = [ {x: line.x1, y: line.y1}, {x: line.x2, y: line.y2} ];
                 for (let pt of points) {
-                    // (A) 완전히 노드에 닿았을 때 (끝점 스냅)
                     const dist = Math.sqrt(Math.pow(pt.x - currentX, 2) + Math.pow(pt.y - currentY, 2));
                     if (dist < minDistNode) {
                         minDistNode = dist;
                         bestNode = pt;
                     }
-                    // (B) X축이 평행할 때 (수직 점선)
                     if (Math.abs(pt.x - currentX) < minDistX) {
                         minDistX = Math.abs(pt.x - currentX);
                         bestGuideX = pt;
                     }
-                    // (C) Y축이 평행할 때 (수평 점선)
                     if (Math.abs(pt.y - currentY) < minDistY) {
                         minDistY = Math.abs(pt.y - currentY);
                         bestGuideY = pt;
@@ -289,13 +306,11 @@
             let guideX = null;
             let guideY = null;
 
-            // 끝점에 닿았으면 점선보다 끝점 결합을 우선
             if (bestNode) {
                 currentX = bestNode.x;
                 currentY = bestNode.y;
                 isNodeSnapped = true;
             } else {
-                // 끝점에 닿지 않았지만 평행할 경우 좌표 보정
                 if (bestGuideX) {
                     currentX = bestGuideX.x;
                     guideX = bestGuideX;
@@ -316,7 +331,6 @@
             let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
             let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
             
-            // 그리기 시작점에서도 기존 선에 스냅되도록 적용
             const calc = getCalculatedPoint(rawX, rawY);
             startX = calc.x;
             startY = calc.y;
@@ -335,9 +349,8 @@
 
             redrawCanvas();
 
-            // --- 스마트 가이드 점선 렌더링 ---
-            ctx.setLineDash([5, 5]); // 점선 설정
-            ctx.strokeStyle = '#bdc3c7'; // 옅은 회색
+            ctx.setLineDash([5, 5]); 
+            ctx.strokeStyle = '#bdc3c7'; 
             ctx.lineWidth = 1;
             
             if (calc.guideX) {
@@ -352,9 +365,8 @@
                 ctx.lineTo(currentX, currentY);
                 ctx.stroke();
             }
-            ctx.setLineDash([]); // 메인 선을 그리기 위해 점선 초기화
+            ctx.setLineDash([]); 
 
-            // 끝점 노드 스냅 표시 (빨간 점)
             if (calc.isNodeSnapped) {
                 ctx.beginPath();
                 ctx.arc(currentX, currentY, 6, 0, Math.PI * 2);
@@ -362,7 +374,6 @@
                 ctx.fill();
             }
 
-            // 메인 파란색 선 그리기
             ctx.beginPath();
             ctx.moveTo(startX, startY);
             ctx.lineTo(currentX, currentY);
@@ -385,7 +396,7 @@
             if (Math.abs(endX - startX) > 5 || Math.abs(endY - startY) > 5) {
                 lines.push({ x1: startX, y1: startY, x2: endX, y2: endY });
             }
-            redrawCanvas(); // 그리기 종료 시 점선 가이드 제거
+            redrawCanvas(); 
         }
 
         canvas.addEventListener('mousedown', startPosition);
@@ -428,7 +439,6 @@
             
             const bgColor = isGood ? '#3498db' : '#e74c3c';
             
-            // 후드 형태에 따른 마커 모양 처리
             if (typeValue === 'enclosed' || typeValue === 'booth') {
                 marker.style.width = '40px';
                 marker.style.height = '40px';
