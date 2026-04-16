@@ -26,6 +26,7 @@
             color: white; font-weight: bold; font-size: 12px; 
             cursor: move; display: flex; justify-content: center; align-items: center;
             box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            user-select: none; /* 텍스트 선택 방지 */
         }
 
         /* 입력 폼 */
@@ -281,7 +282,6 @@
                     hoodArea.value = '';
                 }
             } else if (type === 'circle') {
-                // 입력값을 mm로 받고, 계산 시 m로 변환 (/1000)
                 const d_mm = parseFloat(document.getElementById('circleD').value) || 0;
                 if(d_mm > 0) {
                     const d_m = d_mm / 1000;
@@ -434,18 +434,55 @@
             marker.style.left = '50%'; marker.style.top = '50%';
             marker.title = `[${data.process}] Q: ${data.qValue} m³/min`;
             
+            // --- 마우스 드래그 로직 (이탈 버그 완벽 수정) ---
             function addDragLogic(el) {
+                el.ondragstart = function() { return false; }; // 기본 드래그 방지
+
                 el.onmousedown = function(e) {
                     if(isDrawingMode) return;
+                    e.preventDefault(); // 선택 방지
                     let shiftX = e.clientX - el.getBoundingClientRect().left;
                     let shiftY = e.clientY - el.getBoundingClientRect().top;
+
                     function moveAt(pageX, pageY) {
                         el.style.left = pageX - container.getBoundingClientRect().left - shiftX + 'px';
                         el.style.top = pageY - container.getBoundingClientRect().top - shiftY + 'px';
                     }
-                    function onMouseMove(e) { moveAt(e.pageX, e.pageY); }
+
+                    function onMouseMove(e) { moveAt(e.clientX, e.clientY); }
+
                     document.addEventListener('mousemove', onMouseMove);
-                    el.onmouseup = function() { document.removeEventListener('mousemove', onMouseMove); };
+                    
+                    // 핵심: document에서 마우스 업 감지
+                    document.onmouseup = function() { 
+                        document.removeEventListener('mousemove', onMouseMove);
+                        document.onmouseup = null; // 메모리 누수 방지
+                    };
+                };
+
+                // 터치(모바일) 이벤트
+                el.ontouchstart = function(e) {
+                    if(isDrawingMode) return;
+                    const touch = e.touches[0];
+                    let shiftX = touch.clientX - el.getBoundingClientRect().left;
+                    let shiftY = touch.clientY - el.getBoundingClientRect().top;
+
+                    function moveAt(pageX, pageY) {
+                        el.style.left = pageX - container.getBoundingClientRect().left - shiftX + 'px';
+                        el.style.top = pageY - container.getBoundingClientRect().top - shiftY + 'px';
+                    }
+
+                    function onTouchMove(e) { 
+                        e.preventDefault(); 
+                        moveAt(e.touches[0].clientX, e.touches[0].clientY); 
+                    }
+
+                    document.addEventListener('touchmove', onTouchMove, {passive: false});
+                    
+                    document.ontouchend = function() { 
+                        document.removeEventListener('touchmove', onTouchMove);
+                        document.ontouchend = null;
+                    };
                 };
             }
             
