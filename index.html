@@ -36,6 +36,7 @@
         .input-with-unit input { flex: 1; }
         .radio-group { display: flex; gap: 15px; margin-bottom: 10px; }
         .radio-group label { display: inline; font-weight: normal; }
+        input:disabled { background-color: #ecf0f1; cursor: not-allowed; }
         
         button { background: var(--accent-color); color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 5px; }
         .btn-draw { background: #95a5a6; }
@@ -43,7 +44,7 @@
         .btn-group-row { display: flex; gap: 5px; } 
         
         .status-list { margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; flex-grow: 1; overflow-y: auto; }
-        .status-card { background: #f9f9f9; border-left: 5px solid #ccc; padding: 10px; margin-bottom: 8px; border-radius: 4px; font-size: 13px; }
+        .status-card { background: #f9f9f9; border-left: 5px solid #ccc; padding: 10px; margin-bottom: 8px; border-radius: 4px; font-size: 13px; line-height: 1.4; }
 
         .copyright-sidebar { margin-top: 20px; padding-top: 15px; border-top: 1px dashed #ccc; text-align: center; font-size: 12px; color: #7f8c8d; }
         .copyright-print { display: none; }
@@ -57,62 +58,26 @@
 
         /* --- A4 출력(인쇄) 철저한 최적화 --- */
         @media print {
-            @page {
-                size: A4 portrait;
-                margin: 15mm;
-            }
+            @page { size: A4 portrait; margin: 15mm; }
             body { background: white; margin: 0; padding: 0; }
             
-            /* 1. Flex 레이아웃 완벽 해제 (가로 짤림 방지 핵심) */
-            .container { 
-                display: block !important; 
-                width: 100% !important; 
-                margin: 0 !important; 
-                padding: 0 !important; 
-            }
+            .container { display: block !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
             .sidebar, button, .header button { display: none !important; }
             
-            /* 2. 메인 콘텐츠 가로 폭 100% 고정 */
-            .main-content { 
-                display: block !important; 
-                width: 100% !important; 
-                max-width: 100% !important; 
-                flex: none !important; 
-                box-shadow: none !important; 
-                border: none !important; 
-                padding: 0 !important; 
-                margin: 0 !important; 
-            }
+            .main-content { display: block !important; width: 100% !important; max-width: 100% !important; flex: none !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
             
-            /* 3. 도면 영역 폭 강제 맞춤 및 박스 사이징 */
-            .layout-container { 
-                width: 100% !important; 
-                max-width: 100% !important; 
-                box-sizing: border-box !important;
-                border: 2px solid #000 !important; 
-                height: 400px !important; 
-                page-break-inside: avoid; 
-                margin-bottom: 20px; 
-            }
+            .layout-container { width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; border: 2px solid #000 !important; height: 400px !important; page-break-inside: avoid; margin-bottom: 20px; }
             
-            #printTitle { display: block !important; text-align: center; font-size: 22pt; margin-bottom: 20px; font-weight: bold; color: black; }
+            #printTitle { display: block !important; text-align: center; font-size: 20pt; margin-bottom: 20px; font-weight: bold; color: black; }
             
-            /* 4. 표가 페이지 밖으로 밀려나는 현상 방지 (table-layout: fixed) */
-            .print-table { 
-                display: table !important; 
-                width: 100% !important; 
-                max-width: 100% !important; 
-                table-layout: fixed !important; /* 표 폭 자동 늘어남 차단 */
-                border-collapse: collapse; 
-                font-size: 11pt; 
-                word-break: keep-all; 
-            }
+            /* 컬럼이 늘어났으므로 폰트 크기 및 패딩을 살짝 줄여 짤림 방지 */
+            .print-table { display: table !important; width: 100% !important; max-width: 100% !important; table-layout: fixed !important; border-collapse: collapse; font-size: 9.5pt; word-break: keep-all; }
             .print-table thead { display: table-header-group; } 
             .print-table tr { page-break-inside: avoid; } 
             .print-table th { background-color: #f2f2f2 !important; }
-            .print-table th, .print-table td { border: 1px solid #000; padding: 8px; text-align: center; }
+            .print-table th, .print-table td { border: 1px solid #000; padding: 6px; text-align: center; }
             
-            .copyright-print { display: block; margin-top: 30px; text-align: center; font-size: 10pt; color: #333; border-top: 1px solid #000; padding-top: 10px; page-break-inside: avoid; }
+            .copyright-print { display: block; margin-top: 30px; text-align: center; font-size: 9pt; color: #333; border-top: 1px solid #000; padding-top: 10px; page-break-inside: avoid; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
         .print-table, #printTitle { display: none; }
@@ -129,50 +94,49 @@
             <h3>환경 설정</h3>
             
             <div class="form-group">
-                <label>🏢 1. 전체 공장(사업장)명</label>
-                <input type="text" id="factoryName" placeholder="예: 창원 제1공장">
+                <label>1. 세부 공정명</label>
+                <input type="text" id="processName" placeholder="예: 도장 1라인, 용접부스">
+            </div>
+
+            <div class="form-group">
+                <label>2. 물질 상태</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="state" value="gaseous" checked onchange="updateFormLogic()"> 가스상</label>
+                    <label><input type="radio" name="state" value="particulate" onchange="updateFormLogic()"> 입자상</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>3. 후드 형태 선택</label>
+                <select id="hoodType" onchange="updateFormLogic()">
+                    <option value="enclosed">포위식 (사각형)</option>
+                    <option value="booth">부스식 (사각형)</option>
+                    <option value="lateral">외부식 - 측방형 (삼각형)</option>
+                    <option value="downward">외부식 - 하방형 (삼각형)</option>
+                    <option value="upward">외부식 - 상방형 (삼각형)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>4. 법적 제어유속 (m/s) <span style="font-weight:normal; font-size:12px; color:#7f8c8d;">(자동)</span></label>
+                <input type="number" id="legalVelocity" readonly style="background-color: #f8f9fa;">
             </div>
 
             <hr style="border: 0; height: 1px; background: #eee; margin: 15px 0;">
 
             <div class="form-group">
-                <label>2. 세부 공정명</label>
-                <input type="text" id="processName" placeholder="예: 도장 1라인, 용접부스">
+                <label>5. 개구면적 A (m²)</label>
+                <input type="number" id="hoodArea" step="0.01" placeholder="예: 1.5">
             </div>
 
             <div class="form-group">
-                <label>3. 물질 상태 선택</label>
-                <div class="radio-group">
-                    <label><input type="radio" name="state" value="gaseous" checked onchange="updateLegalVelocity()"> 가스상</label>
-                    <label><input type="radio" name="state" value="particulate" onchange="updateLegalVelocity()"> 입자상</label>
-                </div>
+                <label>6. 오염원 거리 X (m) <span style="font-weight:normal; font-size:12px; color:#e74c3c;" id="distLabel">(외부식 전용)</span></label>
+                <input type="number" id="hoodDistance" step="0.01" placeholder="예: 0.5 (포위식은 비활성화)">
             </div>
 
             <div class="form-group">
-                <label>4. 후드 형태 선택</label>
-                <select id="hoodType" onchange="updateLegalVelocity()">
-                    <option value="enclosed">포위식 (사각형 마커)</option>
-                    <option value="booth">부스식 (사각형 마커)</option>
-                    <option value="lateral">외부식 - 측방형 (삼각형 마커)</option>
-                    <option value="downward">외부식 - 하방형 (삼각형 마커)</option>
-                    <option value="upward">외부식 - 상방형 (삼각형 마커)</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label>5. 법적 제어유속 (자동입력)</label>
-                <div class="input-with-unit">
-                    <input type="number" id="legalVelocity" readonly style="background-color: #f8f9fa;">
-                    <span>m/s</span>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>6. 실제 측정유속</label>
-                <div class="input-with-unit">
-                    <input type="number" id="measuredVelocity" step="0.01" placeholder="현장 측정값 입력">
-                    <span>m/s</span>
-                </div>
+                <label>7. 현장 측정유속 (m/s)</label>
+                <input type="number" id="measuredVelocity" step="0.01" placeholder="실제 측정한 풍속 입력">
             </div>
 
             <button onclick="addHoodToLayout()" style="margin-bottom: 5px;">도면에 배치 및 저장</button>
@@ -184,17 +148,16 @@
             </div>
 
             <div class="status-list" id="statusList">
-                <strong>현장 모니터링 목록</strong>
+                <strong>현장 모니터링 및 배기량 목록</strong>
             </div>
 
             <div class="copyright-sidebar">
-                ⓒ 2026 All rights reserved.<br>
-                시스템 오류 및 기술 문의: <strong>2022582@kiha.or.kr</strong>
+                ⓒ 2026 AI 산업안전 대시보드 | 오류 문의: 2022582@kiha.or.kr
             </div>
         </div>
 
         <div class="main-content panel">
-            <div id="printTitle">국소배기장치 자체 점검 보고서</div>
+            <div id="printTitle">국소배기장치 자체 점검 및 배기량 산출 보고서</div>
             
             <h3 id="modeIndicator" style="margin-top: 0;">현장 레이아웃 (Layout)</h3>
             <div class="layout-container" id="layoutContainer">
@@ -204,13 +167,14 @@
             <table class="print-table" id="printTable">
                 <thead>
                     <tr>
-                        <th>번호</th>
-                        <th>공정명</th>
-                        <th>구분</th>
-                        <th>후드형태</th>
-                        <th>법적유속 (m/s)</th>
-                        <th>측정유속 (m/s)</th>
-                        <th>판정</th>
+                        <th style="width: 5%;">No</th>
+                        <th style="width: 15%;">공정명</th>
+                        <th style="width: 10%;">구분</th>
+                        <th style="width: 18%;">후드형태</th>
+                        <th style="width: 12%;">법적유속<br>(m/s)</th>
+                        <th style="width: 12%;">측정유속<br>(m/s)</th>
+                        <th style="width: 18%;">필요 배기량<br>(m³/min)</th>
+                        <th style="width: 10%;">판정</th>
                     </tr>
                 </thead>
                 <tbody id="printBody"></tbody>
@@ -234,15 +198,6 @@
         let hoodData = [];
         const SNAP_RADIUS = 20;
 
-        document.getElementById('factoryName').addEventListener('input', function() {
-            const printTitle = document.getElementById('printTitle');
-            if(this.value.trim() === '') {
-                printTitle.innerText = "국소배기장치 자체 점검 보고서";
-            } else {
-                printTitle.innerText = `[${this.value}] 국소배기장치 자체 점검 보고서`;
-            }
-        });
-
         function resizeCanvas() {
             canvas.width = container.clientWidth;
             canvas.height = container.clientHeight;
@@ -256,12 +211,26 @@
             particulate: { enclosed: 0.7, booth: 0.7, lateral: 1.0, downward: 1.0, upward: 1.2 }
         };
 
-        function updateLegalVelocity() {
+        // 형태 선택에 따라 법적 유속 업데이트 및 입력칸 활성/비활성 처리
+        function updateFormLogic() {
             const state = document.querySelector('input[name="state"]:checked').value;
             const type = document.getElementById('hoodType').value;
+            const distInput = document.getElementById('hoodDistance');
+            
+            // 1. 법적 유속 자동 세팅
             document.getElementById('legalVelocity').value = velocityMap[state][type].toFixed(1);
+
+            // 2. 외부식이 아니면 거리(X) 입력 비활성화
+            if(type === 'enclosed' || type === 'booth') {
+                distInput.disabled = true;
+                distInput.value = '';
+                distInput.placeholder = "포위/부스식 불필요";
+            } else {
+                distInput.disabled = false;
+                distInput.placeholder = "예: 0.5";
+            }
         }
-        updateLegalVelocity();
+        updateFormLogic(); // 초기 로드 시 실행
 
         function toggleDrawMode() {
             isDrawingMode = !isDrawingMode;
@@ -286,10 +255,7 @@
         }
 
         function undoLastLine() {
-            if (lines.length > 0) {
-                lines.pop();
-                redrawCanvas();
-            }
+            if (lines.length > 0) { lines.pop(); redrawCanvas(); }
         }
 
         document.addEventListener('keydown', function(event) {
@@ -299,6 +265,7 @@
             }
         });
 
+        // 스마트 점선 가이드 로직 (이전과 동일)
         function getCalculatedPoint(rawX, rawY, originX, originY) {
             let currentX = rawX;
             let currentY = rawY;
@@ -310,51 +277,27 @@
                 else if (diffY > diffX * 2.5) { currentX = originX; }
             }
 
-            let bestNode = null;
-            let bestGuideX = null;
-            let bestGuideY = null;
-            let minDistNode = SNAP_RADIUS;
-            let minDistX = SNAP_RADIUS;
-            let minDistY = SNAP_RADIUS;
+            let bestNode = null; let bestGuideX = null; let bestGuideY = null;
+            let minDistNode = SNAP_RADIUS; let minDistX = SNAP_RADIUS; let minDistY = SNAP_RADIUS;
 
             for (let line of lines) {
                 const points = [ {x: line.x1, y: line.y1}, {x: line.x2, y: line.y2} ];
                 for (let pt of points) {
                     const dist = Math.sqrt(Math.pow(pt.x - currentX, 2) + Math.pow(pt.y - currentY, 2));
-                    if (dist < minDistNode) {
-                        minDistNode = dist;
-                        bestNode = pt;
-                    }
-                    if (Math.abs(pt.x - currentX) < minDistX) {
-                        minDistX = Math.abs(pt.x - currentX);
-                        bestGuideX = pt;
-                    }
-                    if (Math.abs(pt.y - currentY) < minDistY) {
-                        minDistY = Math.abs(pt.y - currentY);
-                        bestGuideY = pt;
-                    }
+                    if (dist < minDistNode) { minDistNode = dist; bestNode = pt; }
+                    if (Math.abs(pt.x - currentX) < minDistX) { minDistX = Math.abs(pt.x - currentX); bestGuideX = pt; }
+                    if (Math.abs(pt.y - currentY) < minDistY) { minDistY = Math.abs(pt.y - currentY); bestGuideY = pt; }
                 }
             }
 
-            let isNodeSnapped = false;
-            let guideX = null;
-            let guideY = null;
+            let isNodeSnapped = false; let guideX = null; let guideY = null;
 
             if (bestNode) {
-                currentX = bestNode.x;
-                currentY = bestNode.y;
-                isNodeSnapped = true;
+                currentX = bestNode.x; currentY = bestNode.y; isNodeSnapped = true;
             } else {
-                if (bestGuideX) {
-                    currentX = bestGuideX.x;
-                    guideX = bestGuideX;
-                }
-                if (bestGuideY) {
-                    currentY = bestGuideY.y;
-                    guideY = bestGuideY;
-                }
+                if (bestGuideX) { currentX = bestGuideX.x; guideX = bestGuideX; }
+                if (bestGuideY) { currentY = bestGuideY.y; guideY = bestGuideY; }
             }
-
             return { x: currentX, y: currentY, guideX, guideY, isNodeSnapped };
         }
 
@@ -364,10 +307,8 @@
             const rect = canvas.getBoundingClientRect();
             let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
             let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-            
             const calc = getCalculatedPoint(rawX, rawY);
-            startX = calc.x;
-            startY = calc.y;
+            startX = calc.x; startY = calc.y;
         }
 
         function drawLine(e) {
@@ -378,42 +319,20 @@
             let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
 
             const calc = getCalculatedPoint(rawX, rawY, startX, startY);
-            let currentX = calc.x;
-            let currentY = calc.y;
+            let currentX = calc.x; let currentY = calc.y;
 
             redrawCanvas();
 
-            ctx.setLineDash([5, 5]); 
-            ctx.strokeStyle = '#bdc3c7'; 
-            ctx.lineWidth = 1;
-            
-            if (calc.guideX) {
-                ctx.beginPath();
-                ctx.moveTo(calc.guideX.x, calc.guideX.y);
-                ctx.lineTo(currentX, currentY);
-                ctx.stroke();
-            }
-            if (calc.guideY) {
-                ctx.beginPath();
-                ctx.moveTo(calc.guideY.x, calc.guideY.y);
-                ctx.lineTo(currentX, currentY);
-                ctx.stroke();
-            }
+            ctx.setLineDash([5, 5]); ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 1;
+            if (calc.guideX) { ctx.beginPath(); ctx.moveTo(calc.guideX.x, calc.guideX.y); ctx.lineTo(currentX, currentY); ctx.stroke(); }
+            if (calc.guideY) { ctx.beginPath(); ctx.moveTo(calc.guideY.x, calc.guideY.y); ctx.lineTo(currentX, currentY); ctx.stroke(); }
             ctx.setLineDash([]); 
 
             if (calc.isNodeSnapped) {
-                ctx.beginPath();
-                ctx.arc(currentX, currentY, 6, 0, Math.PI * 2);
-                ctx.fillStyle = '#e74c3c';
-                ctx.fill();
+                ctx.beginPath(); ctx.arc(currentX, currentY, 6, 0, Math.PI * 2); ctx.fillStyle = '#e74c3c'; ctx.fill();
             }
 
-            ctx.beginPath();
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(currentX, currentY);
-            ctx.strokeStyle = '#3498db'; 
-            ctx.lineWidth = 3;
-            ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(currentX, currentY); ctx.strokeStyle = '#3498db'; ctx.lineWidth = 3; ctx.stroke();
         }
 
         function stopPosition(e) {
@@ -424,8 +343,7 @@
             let rawY = (e.changedTouches ? e.changedTouches[0].clientY : e.clientY) - rect.top;
 
             const calc = getCalculatedPoint(rawX, rawY, startX, startY);
-            let endX = calc.x;
-            let endY = calc.y;
+            let endX = calc.x; let endY = calc.y;
 
             if (Math.abs(endX - startX) > 5 || Math.abs(endY - startY) > 5) {
                 lines.push({ x1: startX, y1: startY, x2: endX, y2: endY });
@@ -445,25 +363,44 @@
 
         function addHoodToLayout() {
             const processName = document.getElementById('processName').value;
-            const measured = document.getElementById('measuredVelocity').value;
+            const areaStr = document.getElementById('hoodArea').value;
+            const distStr = document.getElementById('hoodDistance').value;
+            const measuredStr = document.getElementById('measuredVelocity').value;
             const typeSelect = document.getElementById('hoodType');
             const typeValue = typeSelect.value;
             
             if (!processName) { alert("공정명을 입력해주세요."); return; }
-            if (!measured) { alert("측정 유속을 입력해주세요."); return; }
+            if (!areaStr) { alert("개구면적(A)을 입력해주세요."); return; }
+            if (typeValue !== 'enclosed' && typeValue !== 'booth' && !distStr) { alert("외부식의 경우 오염원 거리(X)를 입력해야 합니다."); return; }
+            if (!measuredStr) { alert("측정 유속을 입력해주세요."); return; }
 
             const state = document.querySelector('input[name="state"]:checked').value;
             const typeText = typeSelect.options[typeSelect.selectedIndex].text.split(' (')[0]; 
-            const legal = document.getElementById('legalVelocity').value;
-            const isGood = parseFloat(measured) >= parseFloat(legal);
+            
+            const A = parseFloat(areaStr);
+            const X = distStr ? parseFloat(distStr) : 0;
+            const legalVc = parseFloat(document.getElementById('legalVelocity').value);
+            const measuredVc = parseFloat(measuredStr);
+            const isGood = measuredVc >= legalVc;
+
+            // --- 필요 배기량 산정 공식 적용 ---
+            let requiredQ = 0;
+            if (typeValue === 'enclosed' || typeValue === 'booth') {
+                // 포위식/부스식: Q = A * Vc * 60
+                requiredQ = A * legalVc * 60;
+            } else {
+                // 외부식 (기본 자유공간 공식 적용): Q = Vc * (10X^2 + A) * 60
+                requiredQ = legalVc * (10 * Math.pow(X, 2) + A) * 60;
+            }
 
             const data = {
                 id: hoodData.length + 1,
                 process: processName,
                 state: state === 'gaseous' ? '가스상' : '입자상',
                 type: typeText,
-                legal: legal,
-                measured: measured,
+                legal: legalVc.toFixed(1),
+                measured: measuredVc.toFixed(1),
+                qValue: requiredQ.toFixed(1), // 계산된 배기량 소수점 1자리
                 result: isGood ? '양호' : '미흡'
             };
             hoodData.push(data);
@@ -474,24 +411,19 @@
             const bgColor = isGood ? '#3498db' : '#e74c3c';
             
             if (typeValue === 'enclosed' || typeValue === 'booth') {
-                marker.style.width = '40px';
-                marker.style.height = '40px';
-                marker.style.backgroundColor = bgColor;
-                marker.style.borderRadius = '4px';
+                marker.style.width = '40px'; marker.style.height = '40px';
+                marker.style.backgroundColor = bgColor; marker.style.borderRadius = '4px';
                 marker.innerText = `H${data.id}`;
             } else {
-                marker.style.width = '45px';
-                marker.style.height = '40px';
+                marker.style.width = '45px'; marker.style.height = '40px';
                 marker.style.backgroundColor = bgColor;
                 marker.style.clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)'; 
-                marker.style.alignItems = 'flex-end'; 
-                marker.style.paddingBottom = '5px';
+                marker.style.alignItems = 'flex-end'; marker.style.paddingBottom = '5px';
                 marker.innerText = `H${data.id}`;
             }
 
-            marker.style.left = '50%';
-            marker.style.top = '50%';
-            marker.title = `[${data.process}] ${data.type} (${data.result})`;
+            marker.style.left = '50%'; marker.style.top = '50%';
+            marker.title = `[${data.process}] Q: ${data.qValue} m³/min`;
             
             function addDragLogic(el) {
                 el.onmousedown = function(e) {
@@ -506,27 +438,16 @@
                     document.addEventListener('mousemove', onMouseMove);
                     el.onmouseup = function() { document.removeEventListener('mousemove', onMouseMove); };
                 };
-
-                el.ontouchstart = function(e) {
-                    if(isDrawingMode) return;
-                    const touch = e.touches[0];
-                    let shiftX = touch.clientX - el.getBoundingClientRect().left;
-                    let shiftY = touch.clientY - el.getBoundingClientRect().top;
-                    function moveAt(pageX, pageY) {
-                        el.style.left = pageX - container.getBoundingClientRect().left - shiftX + 'px';
-                        el.style.top = pageY - container.getBoundingClientRect().top - shiftY + 'px';
-                    }
-                    function onTouchMove(e) { e.preventDefault(); moveAt(e.touches[0].clientX, e.touches[0].clientY); }
-                    document.addEventListener('touchmove', onTouchMove, {passive: false});
-                    el.ontouchend = function() { document.removeEventListener('touchmove', onTouchMove); };
-                };
             }
             
             addDragLogic(marker);
             container.appendChild(marker);
             updateStatusList();
             
+            // 입력창 초기화
             document.getElementById('processName').value = '';
+            document.getElementById('hoodArea').value = '';
+            if(typeValue !== 'enclosed' && typeValue !== 'booth') document.getElementById('hoodDistance').value = '';
             document.getElementById('measuredVelocity').value = '';
         }
 
@@ -534,17 +455,30 @@
             const list = document.getElementById('statusList');
             const printBody = document.getElementById('printBody');
             
-            list.innerHTML = '<strong>현장 모니터링 목록</strong>';
+            list.innerHTML = '<strong>현장 모니터링 및 배기량 목록</strong>';
             printBody.innerHTML = '';
 
             hoodData.forEach(h => {
+                // UI 사이드바 목록 표시
                 const card = document.createElement('div');
                 card.className = 'status-card';
                 card.style.borderLeftColor = h.result === '양호' ? '#3498db' : '#e74c3c';
-                card.innerHTML = `[${h.id}] <strong>${h.process}</strong> / ${h.type} (${h.state}) <br> <b>측정: ${h.measured}m/s</b> (법적: ${h.legal}m/s) -> <b style="color:${h.result === '양호' ? '#3498db' : '#e74c3c'}">${h.result}</b>`;
+                card.innerHTML = `[${h.id}] <strong>${h.process}</strong> / ${h.type} <br> 
+                                  ▶ 풍속: 측정 <b>${h.measured}</b> (법적 ${h.legal}) -> <b style="color:${h.result === '양호' ? '#3498db' : '#e74c3c'}">${h.result}</b><br>
+                                  ▶ 필요 배기량: <b>${h.qValue}</b> m³/min`;
                 list.appendChild(card);
 
-                const tr = `<tr><td>${h.id}</td><td>${h.process}</td><td>${h.state}</td><td>${h.type}</td><td>${h.legal}</td><td>${h.measured}</td><td><strong style="color:${h.result === '양호' ? '#3498db' : '#e74c3c'}">${h.result}</strong></td></tr>`;
+                // 인쇄용 테이블 추가
+                const tr = `<tr>
+                                <td>${h.id}</td>
+                                <td>${h.process}</td>
+                                <td>${h.state}</td>
+                                <td>${h.type}</td>
+                                <td>${h.legal}</td>
+                                <td>${h.measured}</td>
+                                <td style="font-weight:bold; background-color:#fef9e7;">${h.qValue}</td>
+                                <td><strong style="color:${h.result === '양호' ? '#3498db' : '#e74c3c'}">${h.result}</strong></td>
+                            </tr>`;
                 printBody.innerHTML += tr;
             });
         }
