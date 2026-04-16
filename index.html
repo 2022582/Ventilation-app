@@ -58,21 +58,18 @@
         @media print {
             @page {
                 size: A4 portrait;
-                margin: 10mm 15mm; /* 상하좌우 여백 조정 */
+                margin: 10mm 15mm;
             }
-            body { background: white; margin: 0; padding: 0; zoom: 95%; /* 짤림 방지 축소 */ }
+            body { background: white; margin: 0; padding: 0; zoom: 95%; }
             .sidebar, button, .header button { display: none !important; }
             .main-content { width: 100%; box-shadow: none; border: none; padding: 0; }
             
-            /* 도면 높이 및 짤림 방지 */
             .layout-container { border: 2px solid #000; height: 400px !important; page-break-inside: avoid; margin-bottom: 20px; }
-            
             #printTitle { display: block !important; text-align: center; font-size: 22pt; margin-bottom: 20px; font-weight: bold; color: black; }
             
-            /* 표 인쇄 최적화 */
             .print-table { display: table !important; width: 100%; border-collapse: collapse; font-size: 11pt; page-break-inside: auto; }
-            .print-table thead { display: table-header-group; } /* 페이지 넘어가도 헤더 유지 */
-            .print-table tr { page-break-inside: avoid; page-break-after: auto; } /* 줄 단위로 잘리지 않게 보호 */
+            .print-table thead { display: table-header-group; } 
+            .print-table tr { page-break-inside: avoid; page-break-after: auto; } 
             .print-table th { background-color: #f2f2f2 !important; }
             .print-table th, .print-table td { border: 1px solid #000; padding: 8px; text-align: center; }
             
@@ -235,6 +232,7 @@
             ctx.strokeStyle = '#2c3e50';
             ctx.lineWidth = 3;
             ctx.lineCap = 'round';
+            ctx.setLineDash([]); // 기본 실선 유지
             
             lines.forEach(line => {
                 ctx.beginPath();
@@ -244,23 +242,71 @@
             });
         }
 
-        function getSnappedPoint(x, y) {
-            let snappedX = x;
-            let snappedY = y;
-            let minDistance = SNAP_RADIUS;
+        // --- 스마트 점선 가이드 및 스냅 계산 로직 ---
+        function getCalculatedPoint(rawX, rawY, originX, originY) {
+            let currentX = rawX;
+            let currentY = rawY;
+
+            // 1. 선 그리기 중일 때: 직각 보정 (가로/세로 강제)
+            if (originX !== undefined && originY !== undefined) {
+                let diffX = Math.abs(rawX - originX);
+                let diffY = Math.abs(rawY - originY);
+                if (diffX > diffY * 2.5) { currentY = originY; } 
+                else if (diffY > diffX * 2.5) { currentX = originX; }
+            }
+
+            // 2. 스마트 가이드라인 및 노드 스냅 찾기
+            let bestNode = null;
+            let bestGuideX = null;
+            let bestGuideY = null;
+            let minDistNode = SNAP_RADIUS;
+            let minDistX = SNAP_RADIUS;
+            let minDistY = SNAP_RADIUS;
 
             for (let line of lines) {
                 const points = [ {x: line.x1, y: line.y1}, {x: line.x2, y: line.y2} ];
                 for (let pt of points) {
-                    const dist = Math.sqrt(Math.pow(pt.x - x, 2) + Math.pow(pt.y - y, 2));
-                    if (dist < minDistance) {
-                        minDistance = dist;
-                        snappedX = pt.x;
-                        snappedY = pt.y;
+                    // (A) 완전히 노드에 닿았을 때 (끝점 스냅)
+                    const dist = Math.sqrt(Math.pow(pt.x - currentX, 2) + Math.pow(pt.y - currentY, 2));
+                    if (dist < minDistNode) {
+                        minDistNode = dist;
+                        bestNode = pt;
+                    }
+                    // (B) X축이 평행할 때 (수직 점선)
+                    if (Math.abs(pt.x - currentX) < minDistX) {
+                        minDistX = Math.abs(pt.x - currentX);
+                        bestGuideX = pt;
+                    }
+                    // (C) Y축이 평행할 때 (수평 점선)
+                    if (Math.abs(pt.y - currentY) < minDistY) {
+                        minDistY = Math.abs(pt.y - currentY);
+                        bestGuideY = pt;
                     }
                 }
             }
-            return { x: snappedX, y: snappedY };
+
+            let isNodeSnapped = false;
+            let guideX = null;
+            let guideY = null;
+
+            // 끝점에 닿았으면 점선보다 끝점 결합을 우선
+            if (bestNode) {
+                currentX = bestNode.x;
+                currentY = bestNode.y;
+                isNodeSnapped = true;
+            } else {
+                // 끝점에 닿지 않았지만 평행할 경우 좌표 보정
+                if (bestGuideX) {
+                    currentX = bestGuideX.x;
+                    guideX = bestGuideX;
+                }
+                if (bestGuideY) {
+                    currentY = bestGuideY.y;
+                    guideY = bestGuideY;
+                }
+            }
+
+            return { x: currentX, y: currentY, guideX, guideY, isNodeSnapped };
         }
 
         function startPosition(e) {
@@ -270,9 +316,10 @@
             let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
             let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
             
-            const snapped = getSnappedPoint(rawX, rawY);
-            startX = snapped.x;
-            startY = snapped.y;
+            // 그리기 시작점에서도 기존 선에 스냅되도록 적용
+            const calc = getCalculatedPoint(rawX, rawY);
+            startX = calc.x;
+            startY = calc.y;
         }
 
         function drawLine(e) {
@@ -282,25 +329,40 @@
             let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
             let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
 
-            let diffX = Math.abs(rawX - startX);
-            let diffY = Math.abs(rawY - startY);
-            
-            if (diffX > diffY * 2.5) { rawY = startY; } 
-            else if (diffY > diffX * 2.5) { rawX = startX; }
-
-            const snapped = getSnappedPoint(rawX, rawY);
-            let currentX = snapped.x;
-            let currentY = snapped.y;
+            const calc = getCalculatedPoint(rawX, rawY, startX, startY);
+            let currentX = calc.x;
+            let currentY = calc.y;
 
             redrawCanvas();
+
+            // --- 스마트 가이드 점선 렌더링 ---
+            ctx.setLineDash([5, 5]); // 점선 설정
+            ctx.strokeStyle = '#bdc3c7'; // 옅은 회색
+            ctx.lineWidth = 1;
             
-            if (currentX !== rawX || currentY !== rawY) {
+            if (calc.guideX) {
+                ctx.beginPath();
+                ctx.moveTo(calc.guideX.x, calc.guideX.y);
+                ctx.lineTo(currentX, currentY);
+                ctx.stroke();
+            }
+            if (calc.guideY) {
+                ctx.beginPath();
+                ctx.moveTo(calc.guideY.x, calc.guideY.y);
+                ctx.lineTo(currentX, currentY);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]); // 메인 선을 그리기 위해 점선 초기화
+
+            // 끝점 노드 스냅 표시 (빨간 점)
+            if (calc.isNodeSnapped) {
                 ctx.beginPath();
                 ctx.arc(currentX, currentY, 6, 0, Math.PI * 2);
                 ctx.fillStyle = '#e74c3c';
                 ctx.fill();
             }
 
+            // 메인 파란색 선 그리기
             ctx.beginPath();
             ctx.moveTo(startX, startY);
             ctx.lineTo(currentX, currentY);
@@ -316,19 +378,14 @@
             let rawX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX) - rect.left;
             let rawY = (e.changedTouches ? e.changedTouches[0].clientY : e.clientY) - rect.top;
 
-            let diffX = Math.abs(rawX - startX);
-            let diffY = Math.abs(rawY - startY);
-            if (diffX > diffY * 2.5) { rawY = startY; } 
-            else if (diffY > diffX * 2.5) { rawX = startX; }
-
-            const snapped = getSnappedPoint(rawX, rawY);
-            let endX = snapped.x;
-            let endY = snapped.y;
+            const calc = getCalculatedPoint(rawX, rawY, startX, startY);
+            let endX = calc.x;
+            let endY = calc.y;
 
             if (Math.abs(endX - startX) > 5 || Math.abs(endY - startY) > 5) {
                 lines.push({ x1: startX, y1: startY, x2: endX, y2: endY });
             }
-            redrawCanvas();
+            redrawCanvas(); // 그리기 종료 시 점선 가이드 제거
         }
 
         canvas.addEventListener('mousedown', startPosition);
@@ -351,7 +408,7 @@
             if (!measured) { alert("측정 유속을 입력해주세요."); return; }
 
             const state = document.querySelector('input[name="state"]:checked').value;
-            const typeText = typeSelect.options[typeSelect.selectedIndex].text.split(' (')[0]; // 마커 설명 제거
+            const typeText = typeSelect.options[typeSelect.selectedIndex].text.split(' (')[0]; 
             const legal = document.getElementById('legalVelocity').value;
             const isGood = parseFloat(measured) >= parseFloat(legal);
 
@@ -371,7 +428,7 @@
             
             const bgColor = isGood ? '#3498db' : '#e74c3c';
             
-            // 후드 형태에 따른 마커 모양 (포위식: 사각형, 외부식: 삼각형)
+            // 후드 형태에 따른 마커 모양 처리
             if (typeValue === 'enclosed' || typeValue === 'booth') {
                 marker.style.width = '40px';
                 marker.style.height = '40px';
@@ -382,8 +439,8 @@
                 marker.style.width = '45px';
                 marker.style.height = '40px';
                 marker.style.backgroundColor = bgColor;
-                marker.style.clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)'; // 삼각형 클리핑
-                marker.style.alignItems = 'flex-end'; // 텍스트를 삼각형 아래쪽으로 배치
+                marker.style.clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)'; 
+                marker.style.alignItems = 'flex-end'; 
                 marker.style.paddingBottom = '5px';
                 marker.innerText = `H${data.id}`;
             }
