@@ -19,12 +19,21 @@
         .layout-container { position: relative; width: 100%; height: 400px; background: #fff; border: 2px solid #bdc3c7; border-radius: 4px; overflow: hidden; touch-action: none; }
         canvas { position: absolute; top: 0; left: 0; z-index: 1; }
         .canvas-drawing { cursor: crosshair; }
-        .hood-marker { position: absolute; z-index: 10; padding: 5px 10px; border-radius: 4px; color: white; font-weight: bold; font-size: 12px; cursor: move; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        
+        /* 후드 마커 스타일 */
+        .hood-marker { 
+            position: absolute; z-index: 10; 
+            color: white; font-weight: bold; font-size: 12px; 
+            cursor: move; display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
 
         /* 입력 폼 */
         .form-group { margin-bottom: 12px; }
         label { display: block; font-weight: bold; margin-bottom: 5px; font-size: 14px; }
         select, input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+        .input-with-unit { display: flex; align-items: center; gap: 8px; }
+        .input-with-unit input { flex: 1; }
         .radio-group { display: flex; gap: 15px; margin-bottom: 10px; }
         .radio-group label { display: inline; font-weight: normal; }
         
@@ -35,7 +44,6 @@
         .status-list { margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px; flex-grow: 1; overflow-y: auto; }
         .status-card { background: #f9f9f9; border-left: 5px solid #ccc; padding: 10px; margin-bottom: 8px; border-radius: 4px; font-size: 13px; }
 
-        /* 저작권 및 문의처 스타일 */
         .copyright-sidebar { margin-top: 20px; padding-top: 15px; border-top: 1px dashed #ccc; text-align: center; font-size: 12px; color: #7f8c8d; }
         .copyright-print { display: none; }
 
@@ -46,25 +54,27 @@
             .layout-container { height: 600px; }
         }
 
-        /* --- A4 출력(인쇄) 전용 규격 설정 --- */
+        /* --- A4 출력(인쇄) 최적화 설정 --- */
         @media print {
             @page {
-                size: A4 portrait; /* A4 세로 규격 강제 지정 */
-                margin: 15mm; /* 출력 여백 설정 */
+                size: A4 portrait;
+                margin: 10mm 15mm; /* 상하좌우 여백 조정 */
             }
-            body { background: white; margin: 0; padding: 0; }
+            body { background: white; margin: 0; padding: 0; zoom: 95%; /* 짤림 방지 축소 */ }
             .sidebar, button, .header button { display: none !important; }
             .main-content { width: 100%; box-shadow: none; border: none; padding: 0; }
             
-            /* 도면 높이를 A4 비율에 맞게 고정 */
-            .layout-container { border: 2px solid #000; height: 120mm; page-break-inside: avoid; }
+            /* 도면 높이 및 짤림 방지 */
+            .layout-container { border: 2px solid #000; height: 400px !important; page-break-inside: avoid; margin-bottom: 20px; }
             
-            #printTitle { display: block !important; text-align: center; font-size: 24pt; margin-bottom: 25px; font-weight: bold; color: black; }
+            #printTitle { display: block !important; text-align: center; font-size: 22pt; margin-bottom: 20px; font-weight: bold; color: black; }
             
-            .print-table { display: table !important; width: 100%; border-collapse: collapse; margin-top: 25px; font-size: 11pt; page-break-inside: auto; }
-            .print-table tr { page-break-inside: avoid; page-break-after: auto; }
+            /* 표 인쇄 최적화 */
+            .print-table { display: table !important; width: 100%; border-collapse: collapse; font-size: 11pt; page-break-inside: auto; }
+            .print-table thead { display: table-header-group; } /* 페이지 넘어가도 헤더 유지 */
+            .print-table tr { page-break-inside: avoid; page-break-after: auto; } /* 줄 단위로 잘리지 않게 보호 */
             .print-table th { background-color: #f2f2f2 !important; }
-            .print-table th, .print-table td { border: 1px solid #000; padding: 10px; text-align: center; }
+            .print-table th, .print-table td { border: 1px solid #000; padding: 8px; text-align: center; }
             
             .copyright-print { display: block; margin-top: 30px; text-align: center; font-size: 10pt; color: #333; border-top: 1px solid #000; padding-top: 10px; page-break-inside: avoid; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -105,22 +115,28 @@
             <div class="form-group">
                 <label>4. 후드 형태 선택</label>
                 <select id="hoodType" onchange="updateLegalVelocity()">
-                    <option value="enclosed">포위식</option>
-                    <option value="booth">부스식</option>
-                    <option value="lateral">외부식 - 측방형</option>
-                    <option value="downward">외부식 - 하방형</option>
-                    <option value="upward">외부식 - 상방형</option>
+                    <option value="enclosed">포위식 (사각형 마커)</option>
+                    <option value="booth">부스식 (사각형 마커)</option>
+                    <option value="lateral">외부식 - 측방형 (삼각형 마커)</option>
+                    <option value="downward">외부식 - 하방형 (삼각형 마커)</option>
+                    <option value="upward">외부식 - 상방형 (삼각형 마커)</option>
                 </select>
             </div>
 
             <div class="form-group">
                 <label>5. 법적 제어유속 (자동입력)</label>
-                <input type="number" id="legalVelocity" readonly style="background-color: #f8f9fa;">
+                <div class="input-with-unit">
+                    <input type="number" id="legalVelocity" readonly style="background-color: #f8f9fa;">
+                    <span>m/s</span>
+                </div>
             </div>
 
             <div class="form-group">
-                <label>6. 실제 측정유속 (m/s)</label>
-                <input type="number" id="measuredVelocity" step="0.01" placeholder="현장 측정값 입력">
+                <label>6. 실제 측정유속</label>
+                <div class="input-with-unit">
+                    <input type="number" id="measuredVelocity" step="0.01" placeholder="현장 측정값 입력">
+                    <span>m/s</span>
+                </div>
             </div>
 
             <button onclick="addHoodToLayout()">도면에 배치 및 저장</button>
@@ -152,8 +168,8 @@
                         <th>공정명</th>
                         <th>구분</th>
                         <th>후드형태</th>
-                        <th>법적유속</th>
-                        <th>측정유속</th>
+                        <th>법적유속 (m/s)</th>
+                        <th>측정유속 (m/s)</th>
                         <th>판정</th>
                     </tr>
                 </thead>
@@ -210,7 +226,7 @@
         function toggleDrawMode() {
             isDrawingMode = !isDrawingMode;
             document.getElementById('drawBtn').innerText = `도면 그리기 모드: ${isDrawingMode ? 'ON' : 'OFF'}`;
-            document.getElementById('modeIndicator').innerText = isDrawingMode ? "국소배기 배치도" : "현장 레이아웃 (Layout)";
+            document.getElementById('modeIndicator').innerText = isDrawingMode ? "국소배기 배치도 (편집 중)" : "현장 레이아웃 (Layout)";
             isDrawingMode ? canvas.classList.add('canvas-drawing') : canvas.classList.remove('canvas-drawing');
         }
 
@@ -266,27 +282,18 @@
             let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
             let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
 
-            // --- 1. 직각 (수평/수직) 보정 로직 추가 ---
             let diffX = Math.abs(rawX - startX);
             let diffY = Math.abs(rawY - startY);
             
-            // X축 이동이 Y축 이동보다 2.5배 이상 크면 수평(가로)으로 고정
-            if (diffX > diffY * 2.5) {
-                rawY = startY;
-            } 
-            // Y축 이동이 X축 이동보다 2.5배 이상 크면 수직(세로)으로 고정
-            else if (diffY > diffX * 2.5) {
-                rawX = startX;
-            }
+            if (diffX > diffY * 2.5) { rawY = startY; } 
+            else if (diffY > diffX * 2.5) { rawX = startX; }
 
-            // --- 2. 끝점 스냅 적용 ---
             const snapped = getSnappedPoint(rawX, rawY);
             let currentX = snapped.x;
             let currentY = snapped.y;
 
             redrawCanvas();
             
-            // 스냅된 경우 빨간 점 표시
             if (currentX !== rawX || currentY !== rawY) {
                 ctx.beginPath();
                 ctx.arc(currentX, currentY, 6, 0, Math.PI * 2);
@@ -309,16 +316,11 @@
             let rawX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX) - rect.left;
             let rawY = (e.changedTouches ? e.changedTouches[0].clientY : e.clientY) - rect.top;
 
-            // 직각 보정
             let diffX = Math.abs(rawX - startX);
             let diffY = Math.abs(rawY - startY);
-            if (diffX > diffY * 2.5) {
-                rawY = startY;
-            } else if (diffY > diffX * 2.5) {
-                rawX = startX;
-            }
+            if (diffX > diffY * 2.5) { rawY = startY; } 
+            else if (diffY > diffX * 2.5) { rawX = startX; }
 
-            // 끝점 스냅
             const snapped = getSnappedPoint(rawX, rawY);
             let endX = snapped.x;
             let endY = snapped.y;
@@ -342,13 +344,14 @@
         function addHoodToLayout() {
             const processName = document.getElementById('processName').value;
             const measured = document.getElementById('measuredVelocity').value;
+            const typeSelect = document.getElementById('hoodType');
+            const typeValue = typeSelect.value;
             
             if (!processName) { alert("공정명을 입력해주세요."); return; }
             if (!measured) { alert("측정 유속을 입력해주세요."); return; }
 
             const state = document.querySelector('input[name="state"]:checked').value;
-            const typeSelect = document.getElementById('hoodType');
-            const typeText = typeSelect.options[typeSelect.selectedIndex].text;
+            const typeText = typeSelect.options[typeSelect.selectedIndex].text.split(' (')[0]; // 마커 설명 제거
             const legal = document.getElementById('legalVelocity').value;
             const isGood = parseFloat(measured) >= parseFloat(legal);
 
@@ -365,10 +368,28 @@
 
             const marker = document.createElement('div');
             marker.className = 'hood-marker';
-            marker.style.backgroundColor = isGood ? '#3498db' : '#e74c3c';
+            
+            const bgColor = isGood ? '#3498db' : '#e74c3c';
+            
+            // 후드 형태에 따른 마커 모양 (포위식: 사각형, 외부식: 삼각형)
+            if (typeValue === 'enclosed' || typeValue === 'booth') {
+                marker.style.width = '40px';
+                marker.style.height = '40px';
+                marker.style.backgroundColor = bgColor;
+                marker.style.borderRadius = '4px';
+                marker.innerText = `H${data.id}`;
+            } else {
+                marker.style.width = '45px';
+                marker.style.height = '40px';
+                marker.style.backgroundColor = bgColor;
+                marker.style.clipPath = 'polygon(50% 0%, 0% 100%, 100% 100%)'; // 삼각형 클리핑
+                marker.style.alignItems = 'flex-end'; // 텍스트를 삼각형 아래쪽으로 배치
+                marker.style.paddingBottom = '5px';
+                marker.innerText = `H${data.id}`;
+            }
+
             marker.style.left = '50%';
             marker.style.top = '50%';
-            marker.innerText = `H${data.id}`;
             marker.title = `[${data.process}] ${data.type} (${data.result})`;
             
             function addDragLogic(el) {
@@ -419,7 +440,7 @@
                 const card = document.createElement('div');
                 card.className = 'status-card';
                 card.style.borderLeftColor = h.result === '양호' ? '#3498db' : '#e74c3c';
-                card.innerHTML = `[${h.id}] <strong>${h.process}</strong> / ${h.type} (${h.state}) <br> <b>측정: ${h.measured}</b> (법적: ${h.legal}) -> <b style="color:${h.result === '양호' ? '#3498db' : '#e74c3c'}">${h.result}</b>`;
+                card.innerHTML = `[${h.id}] <strong>${h.process}</strong> / ${h.type} (${h.state}) <br> <b>측정: ${h.measured}m/s</b> (법적: ${h.legal}m/s) -> <b style="color:${h.result === '양호' ? '#3498db' : '#e74c3c'}">${h.result}</b>`;
                 list.appendChild(card);
 
                 const tr = `<tr><td>${h.id}</td><td>${h.process}</td><td>${h.state}</td><td>${h.type}</td><td>${h.legal}</td><td>${h.measured}</td><td><strong style="color:${h.result === '양호' ? '#3498db' : '#e74c3c'}">${h.result}</strong></td></tr>`;
