@@ -36,7 +36,11 @@
         .input-with-unit input { flex: 1; }
         .radio-group { display: flex; gap: 15px; margin-bottom: 10px; }
         .radio-group label { display: inline; font-weight: normal; }
-        input:disabled { background-color: #ecf0f1; cursor: not-allowed; }
+        input:disabled, input[readonly] { background-color: #f8f9fa; cursor: not-allowed; color: #7f8c8d; }
+        
+        /* 면적 계산용 서브 폼 */
+        .sub-inputs { display: none; gap: 5px; margin-bottom: 5px; background: #fdfefe; padding: 8px; border: 1px dashed #bdc3c7; border-radius: 4px; }
+        .sub-inputs span { line-height: 38px; font-weight: bold; color: #7f8c8d; }
         
         button { background: var(--accent-color); color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 5px; }
         .btn-draw { background: #95a5a6; }
@@ -51,32 +55,25 @@
 
         @media (min-width: 768px) {
             .container { flex-direction: row; }
-            .sidebar { width: 350px; order: 1; }
+            .sidebar { width: 380px; order: 1; }
             .main-content { flex: 1; order: 2; }
             .layout-container { height: 600px; }
         }
 
-        /* --- A4 출력(인쇄) 철저한 최적화 --- */
+        /* --- A4 출력(인쇄) 최적화 --- */
         @media print {
             @page { size: A4 portrait; margin: 15mm; }
             body { background: white; margin: 0; padding: 0; }
-            
             .container { display: block !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
             .sidebar, button, .header button { display: none !important; }
-            
             .main-content { display: block !important; width: 100% !important; max-width: 100% !important; flex: none !important; box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; }
-            
             .layout-container { width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; border: 2px solid #000 !important; height: 400px !important; page-break-inside: avoid; margin-bottom: 20px; }
-            
             #printTitle { display: block !important; text-align: center; font-size: 20pt; margin-bottom: 20px; font-weight: bold; color: black; }
-            
-            /* 컬럼이 늘어났으므로 폰트 크기 및 패딩을 살짝 줄여 짤림 방지 */
             .print-table { display: table !important; width: 100% !important; max-width: 100% !important; table-layout: fixed !important; border-collapse: collapse; font-size: 9.5pt; word-break: keep-all; }
             .print-table thead { display: table-header-group; } 
             .print-table tr { page-break-inside: avoid; } 
             .print-table th { background-color: #f2f2f2 !important; }
             .print-table th, .print-table td { border: 1px solid #000; padding: 6px; text-align: center; }
-            
             .copyright-print { display: block; margin-top: 30px; text-align: center; font-size: 9pt; color: #333; border-top: 1px solid #000; padding-top: 10px; page-break-inside: avoid; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
@@ -119,14 +116,30 @@
 
             <div class="form-group">
                 <label>4. 법적 제어유속 (m/s) <span style="font-weight:normal; font-size:12px; color:#7f8c8d;">(자동)</span></label>
-                <input type="number" id="legalVelocity" readonly style="background-color: #f8f9fa;">
+                <input type="number" id="legalVelocity" readonly>
             </div>
 
             <hr style="border: 0; height: 1px; background: #eee; margin: 15px 0;">
 
             <div class="form-group">
                 <label>5. 개구면적 A (m²)</label>
-                <input type="number" id="hoodArea" step="0.01" placeholder="예: 1.5">
+                <div class="radio-group" style="margin-bottom: 8px; font-size: 13px;">
+                    <label><input type="radio" name="areaType" value="direct" checked onchange="toggleAreaInputs()"> 직접입력</label>
+                    <label><input type="radio" name="areaType" value="rect" onchange="toggleAreaInputs()"> 사각형</label>
+                    <label><input type="radio" name="areaType" value="circle" onchange="toggleAreaInputs()"> 원형</label>
+                </div>
+                
+                <div id="rectInputs" class="sub-inputs" style="display: none;">
+                    <input type="number" id="rectW" step="0.01" placeholder="가로 (m)" oninput="calculateArea()">
+                    <span>×</span>
+                    <input type="number" id="rectH" step="0.01" placeholder="세로 (m)" oninput="calculateArea()">
+                </div>
+                
+                <div id="circleInputs" class="sub-inputs" style="display: none;">
+                    <input type="number" id="circleD" step="0.01" placeholder="원형 직경 (m)" oninput="calculateArea()">
+                </div>
+
+                <input type="number" id="hoodArea" step="0.01" placeholder="최종 개구면적 (m²)">
             </div>
 
             <div class="form-group">
@@ -211,16 +224,13 @@
             particulate: { enclosed: 0.7, booth: 0.7, lateral: 1.0, downward: 1.0, upward: 1.2 }
         };
 
-        // 형태 선택에 따라 법적 유속 업데이트 및 입력칸 활성/비활성 처리
         function updateFormLogic() {
             const state = document.querySelector('input[name="state"]:checked').value;
             const type = document.getElementById('hoodType').value;
             const distInput = document.getElementById('hoodDistance');
             
-            // 1. 법적 유속 자동 세팅
             document.getElementById('legalVelocity').value = velocityMap[state][type].toFixed(1);
 
-            // 2. 외부식이 아니면 거리(X) 입력 비활성화
             if(type === 'enclosed' || type === 'booth') {
                 distInput.disabled = true;
                 distInput.value = '';
@@ -230,7 +240,56 @@
                 distInput.placeholder = "예: 0.5";
             }
         }
-        updateFormLogic(); // 초기 로드 시 실행
+        updateFormLogic();
+
+        // --- 개구면적 자동 계산 로직 ---
+        function toggleAreaInputs() {
+            const type = document.querySelector('input[name="areaType"]:checked').value;
+            const rectInputs = document.getElementById('rectInputs');
+            const circleInputs = document.getElementById('circleInputs');
+            const hoodArea = document.getElementById('hoodArea');
+
+            if (type === 'direct') {
+                rectInputs.style.display = 'none';
+                circleInputs.style.display = 'none';
+                hoodArea.readOnly = false;
+                hoodArea.placeholder = "최종 개구면적 (m²)";
+            } else if (type === 'rect') {
+                rectInputs.style.display = 'flex';
+                circleInputs.style.display = 'none';
+                hoodArea.readOnly = true;
+                hoodArea.placeholder = "자동 계산됨";
+                calculateArea();
+            } else if (type === 'circle') {
+                rectInputs.style.display = 'none';
+                circleInputs.style.display = 'flex';
+                hoodArea.readOnly = true;
+                hoodArea.placeholder = "자동 계산됨";
+                calculateArea();
+            }
+        }
+
+        function calculateArea() {
+            const type = document.querySelector('input[name="areaType"]:checked').value;
+            const hoodArea = document.getElementById('hoodArea');
+
+            if (type === 'rect') {
+                const w = parseFloat(document.getElementById('rectW').value) || 0;
+                const h = parseFloat(document.getElementById('rectH').value) || 0;
+                if(w > 0 && h > 0) {
+                    hoodArea.value = (w * h).toFixed(3); // 소수점 3자리까지 표시
+                } else {
+                    hoodArea.value = '';
+                }
+            } else if (type === 'circle') {
+                const d = parseFloat(document.getElementById('circleD').value) || 0;
+                if(d > 0) {
+                    hoodArea.value = (Math.PI * Math.pow(d, 2) / 4).toFixed(3);
+                } else {
+                    hoodArea.value = '';
+                }
+            }
+        }
 
         function toggleDrawMode() {
             isDrawingMode = !isDrawingMode;
@@ -245,41 +304,25 @@
             ctx.lineWidth = 3;
             ctx.lineCap = 'round';
             ctx.setLineDash([]); 
-            
             lines.forEach(line => {
-                ctx.beginPath();
-                ctx.moveTo(line.x1, line.y1);
-                ctx.lineTo(line.x2, line.y2);
-                ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(line.x1, line.y1); ctx.lineTo(line.x2, line.y2); ctx.stroke();
             });
         }
 
-        function undoLastLine() {
-            if (lines.length > 0) { lines.pop(); redrawCanvas(); }
-        }
+        function undoLastLine() { if (lines.length > 0) { lines.pop(); redrawCanvas(); } }
 
         document.addEventListener('keydown', function(event) {
-            if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) {
-                event.preventDefault(); 
-                undoLastLine();
-            }
+            if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) { event.preventDefault(); undoLastLine(); }
         });
 
-        // 스마트 점선 가이드 로직 (이전과 동일)
         function getCalculatedPoint(rawX, rawY, originX, originY) {
-            let currentX = rawX;
-            let currentY = rawY;
-
+            let currentX = rawX; let currentY = rawY;
             if (originX !== undefined && originY !== undefined) {
-                let diffX = Math.abs(rawX - originX);
-                let diffY = Math.abs(rawY - originY);
-                if (diffX > diffY * 2.5) { currentY = originY; } 
-                else if (diffY > diffX * 2.5) { currentX = originX; }
+                let diffX = Math.abs(rawX - originX); let diffY = Math.abs(rawY - originY);
+                if (diffX > diffY * 2.5) { currentY = originY; } else if (diffY > diffX * 2.5) { currentX = originX; }
             }
-
             let bestNode = null; let bestGuideX = null; let bestGuideY = null;
             let minDistNode = SNAP_RADIUS; let minDistX = SNAP_RADIUS; let minDistY = SNAP_RADIUS;
-
             for (let line of lines) {
                 const points = [ {x: line.x1, y: line.y1}, {x: line.x2, y: line.y2} ];
                 for (let pt of points) {
@@ -289,74 +332,42 @@
                     if (Math.abs(pt.y - currentY) < minDistY) { minDistY = Math.abs(pt.y - currentY); bestGuideY = pt; }
                 }
             }
-
             let isNodeSnapped = false; let guideX = null; let guideY = null;
-
-            if (bestNode) {
-                currentX = bestNode.x; currentY = bestNode.y; isNodeSnapped = true;
-            } else {
-                if (bestGuideX) { currentX = bestGuideX.x; guideX = bestGuideX; }
-                if (bestGuideY) { currentY = bestGuideY.y; guideY = bestGuideY; }
-            }
+            if (bestNode) { currentX = bestNode.x; currentY = bestNode.y; isNodeSnapped = true; } 
+            else { if (bestGuideX) { currentX = bestGuideX.x; guideX = bestGuideX; } if (bestGuideY) { currentY = bestGuideY.y; guideY = bestGuideY; } }
             return { x: currentX, y: currentY, guideX, guideY, isNodeSnapped };
         }
 
         function startPosition(e) {
-            if (!isDrawingMode) return;
-            isDrawing = true;
-            const rect = canvas.getBoundingClientRect();
-            let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-            let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-            const calc = getCalculatedPoint(rawX, rawY);
-            startX = calc.x; startY = calc.y;
+            if (!isDrawingMode) return; isDrawing = true; const rect = canvas.getBoundingClientRect();
+            let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left; let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            const calc = getCalculatedPoint(rawX, rawY); startX = calc.x; startY = calc.y;
         }
 
         function drawLine(e) {
-            if (!isDrawing) return;
-            e.preventDefault(); 
-            const rect = canvas.getBoundingClientRect();
-            let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-            let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
-
-            const calc = getCalculatedPoint(rawX, rawY, startX, startY);
-            let currentX = calc.x; let currentY = calc.y;
-
+            if (!isDrawing) return; e.preventDefault(); const rect = canvas.getBoundingClientRect();
+            let rawX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left; let rawY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            const calc = getCalculatedPoint(rawX, rawY, startX, startY); let currentX = calc.x; let currentY = calc.y;
             redrawCanvas();
-
             ctx.setLineDash([5, 5]); ctx.strokeStyle = '#bdc3c7'; ctx.lineWidth = 1;
             if (calc.guideX) { ctx.beginPath(); ctx.moveTo(calc.guideX.x, calc.guideX.y); ctx.lineTo(currentX, currentY); ctx.stroke(); }
             if (calc.guideY) { ctx.beginPath(); ctx.moveTo(calc.guideY.x, calc.guideY.y); ctx.lineTo(currentX, currentY); ctx.stroke(); }
             ctx.setLineDash([]); 
-
-            if (calc.isNodeSnapped) {
-                ctx.beginPath(); ctx.arc(currentX, currentY, 6, 0, Math.PI * 2); ctx.fillStyle = '#e74c3c'; ctx.fill();
-            }
-
+            if (calc.isNodeSnapped) { ctx.beginPath(); ctx.arc(currentX, currentY, 6, 0, Math.PI * 2); ctx.fillStyle = '#e74c3c'; ctx.fill(); }
             ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(currentX, currentY); ctx.strokeStyle = '#3498db'; ctx.lineWidth = 3; ctx.stroke();
         }
 
         function stopPosition(e) {
-            if (!isDrawing) return;
-            isDrawing = false;
-            const rect = canvas.getBoundingClientRect();
-            let rawX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX) - rect.left;
-            let rawY = (e.changedTouches ? e.changedTouches[0].clientY : e.clientY) - rect.top;
-
-            const calc = getCalculatedPoint(rawX, rawY, startX, startY);
-            let endX = calc.x; let endY = calc.y;
-
-            if (Math.abs(endX - startX) > 5 || Math.abs(endY - startY) > 5) {
-                lines.push({ x1: startX, y1: startY, x2: endX, y2: endY });
-            }
+            if (!isDrawing) return; isDrawing = false; const rect = canvas.getBoundingClientRect();
+            let rawX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX) - rect.left; let rawY = (e.changedTouches ? e.changedTouches[0].clientY : e.clientY) - rect.top;
+            const calc = getCalculatedPoint(rawX, rawY, startX, startY); let endX = calc.x; let endY = calc.y;
+            if (Math.abs(endX - startX) > 5 || Math.abs(endY - startY) > 5) { lines.push({ x1: startX, y1: startY, x2: endX, y2: endY }); }
             redrawCanvas(); 
         }
 
-        canvas.addEventListener('mousedown', startPosition);
-        canvas.addEventListener('mousemove', drawLine);
-        canvas.addEventListener('mouseup', stopPosition);
-        canvas.addEventListener('mouseleave', stopPosition);
-        canvas.addEventListener('touchstart', startPosition, {passive: false});
-        canvas.addEventListener('touchmove', drawLine, {passive: false});
+        canvas.addEventListener('mousedown', startPosition); canvas.addEventListener('mousemove', drawLine);
+        canvas.addEventListener('mouseup', stopPosition); canvas.addEventListener('mouseleave', stopPosition);
+        canvas.addEventListener('touchstart', startPosition, {passive: false}); canvas.addEventListener('touchmove', drawLine, {passive: false});
         canvas.addEventListener('touchend', stopPosition);
 
         function clearCanvas() { lines = []; redrawCanvas(); }
@@ -370,7 +381,7 @@
             const typeValue = typeSelect.value;
             
             if (!processName) { alert("공정명을 입력해주세요."); return; }
-            if (!areaStr) { alert("개구면적(A)을 입력해주세요."); return; }
+            if (!areaStr) { alert("개구면적(A)을 입력하거나 계산해주세요."); return; }
             if (typeValue !== 'enclosed' && typeValue !== 'booth' && !distStr) { alert("외부식의 경우 오염원 거리(X)를 입력해야 합니다."); return; }
             if (!measuredStr) { alert("측정 유속을 입력해주세요."); return; }
 
@@ -383,13 +394,10 @@
             const measuredVc = parseFloat(measuredStr);
             const isGood = measuredVc >= legalVc;
 
-            // --- 필요 배기량 산정 공식 적용 ---
             let requiredQ = 0;
             if (typeValue === 'enclosed' || typeValue === 'booth') {
-                // 포위식/부스식: Q = A * Vc * 60
                 requiredQ = A * legalVc * 60;
             } else {
-                // 외부식 (기본 자유공간 공식 적용): Q = Vc * (10X^2 + A) * 60
                 requiredQ = legalVc * (10 * Math.pow(X, 2) + A) * 60;
             }
 
@@ -400,7 +408,7 @@
                 type: typeText,
                 legal: legalVc.toFixed(1),
                 measured: measuredVc.toFixed(1),
-                qValue: requiredQ.toFixed(1), // 계산된 배기량 소수점 1자리
+                qValue: requiredQ.toFixed(2), 
                 result: isGood ? '양호' : '미흡'
             };
             hoodData.push(data);
@@ -444,8 +452,11 @@
             container.appendChild(marker);
             updateStatusList();
             
-            // 입력창 초기화
+            // 폼 입력창 초기화
             document.getElementById('processName').value = '';
+            document.getElementById('rectW').value = '';
+            document.getElementById('rectH').value = '';
+            document.getElementById('circleD').value = '';
             document.getElementById('hoodArea').value = '';
             if(typeValue !== 'enclosed' && typeValue !== 'booth') document.getElementById('hoodDistance').value = '';
             document.getElementById('measuredVelocity').value = '';
@@ -459,7 +470,6 @@
             printBody.innerHTML = '';
 
             hoodData.forEach(h => {
-                // UI 사이드바 목록 표시
                 const card = document.createElement('div');
                 card.className = 'status-card';
                 card.style.borderLeftColor = h.result === '양호' ? '#3498db' : '#e74c3c';
@@ -468,7 +478,6 @@
                                   ▶ 필요 배기량: <b>${h.qValue}</b> m³/min`;
                 list.appendChild(card);
 
-                // 인쇄용 테이블 추가
                 const tr = `<tr>
                                 <td>${h.id}</td>
                                 <td>${h.process}</td>
