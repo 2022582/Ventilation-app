@@ -17,8 +17,7 @@
         
         /* 도면 영역 */
         .layout-container { position: relative; width: 100%; height: 400px; background: #fff; border: 2px solid #bdc3c7; border-radius: 4px; overflow: hidden; touch-action: none; }
-        /* 캔버스가 빈틈없이 영역을 채우도록 width, height 100% 명시 */
-        canvas { position: absolute; top: 0; left: 0; z-index: 1; width: 100%; height: 100%; }
+        canvas { position: absolute; top: 0; left: 0; z-index: 1; }
         .canvas-drawing { cursor: crosshair; }
         
         /* 후드 마커 스타일 */
@@ -224,14 +223,12 @@
         let nextId = 1; 
         let currentEditId = null; 
 
-        // 캔버스 크기 동기화 (오류 방지 위해 크기 변경 시에만 실행)
+        // 캔버스 크기 안전하게 동기화
         function resizeCanvas() {
             if (container.clientWidth > 0 && container.clientHeight > 0) {
-                if (canvas.width !== container.clientWidth || canvas.height !== container.clientHeight) {
-                    canvas.width = container.clientWidth;
-                    canvas.height = container.clientHeight;
-                    redrawCanvas(); 
-                }
+                canvas.width = container.clientWidth;
+                canvas.height = container.clientHeight;
+                redrawCanvas(); 
             }
         }
         window.addEventListener('resize', resizeCanvas);
@@ -309,12 +306,15 @@
             }
         }
 
-        // --- 도면 그리기 ---
+        // --- 도면 그리기 (에러 완벽 수정) ---
         function toggleDrawMode() {
             isDrawingMode = !isDrawingMode;
             document.getElementById('drawBtn').innerText = `도면 그리기 모드: ${isDrawingMode ? 'ON' : 'OFF'}`;
             document.getElementById('modeIndicator').innerText = isDrawingMode ? "국소배기 배치도 (편집 중)" : "현장 레이아웃 (Layout)";
             isDrawingMode ? canvas.classList.add('canvas-drawing') : canvas.classList.remove('canvas-drawing');
+            
+            // 그리기 모드 켤 때 혹시 모를 캔버스 사이즈 에러 방지
+            if (isDrawingMode) resizeCanvas();
         }
 
         function redrawCanvas() {
@@ -325,6 +325,23 @@
 
         function undoLastLine() { if (lines.length > 0) { lines.pop(); redrawCanvas(); } }
         document.addEventListener('keydown', function(event) { if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) { event.preventDefault(); undoLastLine(); } });
+
+        // 가장 안전한 마우스/터치 좌표 추출 로직
+        function getCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            let cx, cy;
+            if (e.changedTouches && e.changedTouches.length > 0) {
+                cx = e.changedTouches[0].clientX;
+                cy = e.changedTouches[0].clientY;
+            } else if (e.touches && e.touches.length > 0) {
+                cx = e.touches[0].clientX;
+                cy = e.touches[0].clientY;
+            } else {
+                cx = e.clientX;
+                cy = e.clientY;
+            }
+            return { x: cx - rect.left, y: cy - rect.top };
+        }
 
         function getCalculatedPoint(rawX, rawY, originX, originY) {
             let currentX = rawX; let currentY = rawY;
@@ -349,46 +366,29 @@
             return { x: currentX, y: currentY, guideX, guideY, isNodeSnapped };
         }
 
-        // 💡 [에러 원천 차단] 가장 안전하고 확실한 좌표 추출 함수
-        function getEventLocation(e) {
-            const rect = canvas.getBoundingClientRect();
-            let clientX = 0;
-            let clientY = 0;
-
-            if (e.touches && e.touches.length > 0) {
-                clientX = e.touches[0].clientX;
-                clientY = e.touches[0].clientY;
-            } else if (e.changedTouches && e.changedTouches.length > 0) {
-                clientX = e.changedTouches[0].clientX;
-                clientY = e.changedTouches[0].clientY;
-            } else {
-                clientX = e.clientX;
-                clientY = e.clientY;
-            }
-
-            let x = clientX - rect.left;
-            let y = clientY - rect.top;
-
-            // 도면(Canvas) 안으로 좌표를 완벽하게 가둡니다 (짤림 방지)
-            x = Math.max(0, Math.min(x, canvas.width));
-            y = Math.max(0, Math.min(y, canvas.height));
-
-            return { x, y };
-        }
-
         function startPosition(e) {
             if (!isDrawingMode) return; 
             isDrawing = true; 
-            const coords = getEventLocation(e);
-            const calc = getCalculatedPoint(coords.x, coords.y); 
+            const coords = getCoords(e);
+            
+            // 안전하게 캔버스 영역 내로 시작점 가두기
+            let safeX = Math.max(0, Math.min(coords.x, canvas.width));
+            let safeY = Math.max(0, Math.min(coords.y, canvas.height));
+            
+            const calc = getCalculatedPoint(safeX, safeY); 
             startX = calc.x; startY = calc.y;
         }
 
         function drawLine(e) {
             if (!isDrawing) return; 
             e.preventDefault(); 
-            const coords = getEventLocation(e);
-            const calc = getCalculatedPoint(coords.x, coords.y, startX, startY); 
+            const coords = getCoords(e);
+            
+            // 선이 튀어나가지 않게 표시할 때 한계치 설정
+            let safeX = Math.max(0, Math.min(coords.x, canvas.width));
+            let safeY = Math.max(0, Math.min(coords.y, canvas.height));
+            
+            const calc = getCalculatedPoint(safeX, safeY, startX, startY); 
             let currentX = calc.x; let currentY = calc.y;
             
             redrawCanvas();
@@ -404,8 +404,11 @@
             if (!isDrawing) return; 
             isDrawing = false; 
             
-            const coords = getEventLocation(e);
-            const calc = getCalculatedPoint(coords.x, coords.y, startX, startY); 
+            const coords = getCoords(e);
+            let safeX = Math.max(0, Math.min(coords.x, canvas.width));
+            let safeY = Math.max(0, Math.min(coords.y, canvas.height));
+            
+            const calc = getCalculatedPoint(safeX, safeY, startX, startY); 
             let endX = calc.x; let endY = calc.y;
             
             if (Math.abs(endX - startX) > 5 || Math.abs(endY - startY) > 5) { 
@@ -424,7 +427,7 @@
 
         function clearCanvas() { lines = []; redrawCanvas(); }
 
-        // --- 마커 로직 ---
+        // --- 폼 및 마커 기능 ---
         function cancelEdit() {
             currentEditId = null;
             const btn = document.getElementById('saveBtn');
