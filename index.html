@@ -13,9 +13,32 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
+    /* ✅ 인쇄(A4) 최적화를 위한 전용 CSS ✅ */
     @media print {
-      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: white !important; }
-      .page-break-inside-avoid { page-break-inside: avoid; }
+      @page {
+        size: A4 portrait; /* A4 세로 방향 명시 */
+        margin: 15mm; /* 브라우저 기본 여백을 15mm로 통일 */
+      }
+      body { 
+        -webkit-print-color-adjust: exact; 
+        print-color-adjust: exact; 
+        background-color: white !important; 
+      }
+      /* 스크롤 제약을 풀어 페이지가 자연스럽게 넘어가도록 설정 */
+      html, body, #root {
+        height: auto !important;
+        overflow: visible !important;
+      }
+      /* 요소 중간에 페이지가 잘리지 않도록 보호 (도면, 표의 행, 요약 차트 등) */
+      .page-break-inside-avoid { 
+        page-break-inside: avoid; 
+        break-inside: avoid; 
+      }
+      /* 특정 요소 강제 줄바꿈 (필요 시 활용) */
+      .page-break-before {
+        page-break-before: always;
+        break-before: page;
+      }
       ::-webkit-scrollbar { display: none; }
     }
   </style>
@@ -60,7 +83,6 @@
         if (type === 'enclosure' && isPermitted) {
           return state === 'gas' ? 0.5 : 1.0;
         }
-        
         if (state === 'gas') {
           if (type === 'enclosure') return 0.4;
           if (type === 'ext_up') return 1.0;
@@ -137,7 +159,7 @@
               hoodType: "enclosure", materialState: "gas", isPermitted: false, distanceX: 0, 
               controlVelocity: 0.4, measuredControlVelocity: "", shape: "rect",
               width: "", height: "", diameter: "", measuredVelocity: "",
-              openingWidth: "", openingHeight: "" // 포위식 개구면적 입력용 필드 추가
+              openingWidth: "", openingHeight: ""
             }
           };
           setNodes([...nodes, newNode]);
@@ -324,12 +346,11 @@
       const calculateResult = (data) => {
         const { hoodType, distanceX, controlVelocity, measuredControlVelocity, shape, width, height, diameter, measuredVelocity, openingWidth, openingHeight } = data;
         
-        // 1. 측정부(덕트 등) 면적 계산 (현재 배기량용)
         let area = 0;
         if (shape === 'rect') {
-          area = (parseFloat(width) || 0) * (parseFloat(height) || 0); // 사각형 m단위
+          area = (parseFloat(width) || 0) * (parseFloat(height) || 0);
         } else {
-          area = Math.PI * Math.pow(((parseFloat(diameter) || 0) / 1000) / 2, 2); // 원형 mm -> m 변환
+          area = Math.PI * Math.pow(((parseFloat(diameter) || 0) / 1000) / 2, 2);
         }
 
         const vc = parseFloat(controlVelocity) || 0;
@@ -337,20 +358,15 @@
         const vm = parseFloat(measuredVelocity) || 0;
         const x = parseFloat(distanceX) || 0;
 
-        // 2. 필요 배기량(requiredQ) 산출 로직
         let openingArea = (parseFloat(openingWidth) || 0) * (parseFloat(openingHeight) || 0);
         let requiredQ = 0;
 
         if (hoodType === 'enclosure') {
-          // 포위식: 필요배기량 = 60 * 법정풍속 * 포위식 개구면적
           requiredQ = 60 * vc * openingArea;
         } else {
-          // 외부식: 필요배기량 = 60 * 법정풍속 * (10X^2 + A)
-          // (여기서 A는 측정부 면적인 area를 그대로 활용하도록 유지)
           requiredQ = 60 * vc * (10 * Math.pow(x, 2) + area);
         }
 
-        // 3. 현재 배기량(currentQ) 산출 로직
         const currentQ = 60 * vm * area;
 
         const isVelocityGood = vmc >= vc;
@@ -388,9 +404,10 @@
       const pieDashArray = totalHoods > 0 ? (goodHoods / totalHoods) * 100 : 0;
 
       return (
-        <div className="flex flex-col lg:flex-row h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden">
+        // ✅ 인쇄 시 h-screen과 overflow-hidden을 해제하여 페이지가 넘어가도록 수정 ✅
+        <div className="flex flex-col lg:flex-row h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden print:block print:h-auto print:overflow-visible">
           
-          {/* 좌측 패널 */}
+          {/* 좌측 패널 (인쇄 시 숨김) */}
           <div className="w-full lg:w-[400px] flex-shrink-0 bg-white border-r border-slate-200 shadow-xl z-10 flex flex-col h-full print:hidden">
             <div className="p-4 bg-blue-700 text-white flex justify-between items-center">
               <div>
@@ -459,14 +476,12 @@
                   </div>
                 ) : (
                   <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
-                    {/* 1) 공정명 */}
                     <div>
                       <label className="block text-xs font-bold mb-1">공정명</label>
                       <input type="text" value={selectedNode.data.processName} onChange={e => updateNodeData('processName', e.target.value)}
                         className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:border-blue-500" />
                     </div>
 
-                    {/* 2) 사진 첨부 */}
                     <div>
                       <label className="block text-xs font-bold mb-1">현장 사진</label>
                       <div className="flex gap-2">
@@ -506,7 +521,6 @@
                       </div>
                     </div>
 
-                    {/* 포위식/부스식일 때만 활성화되는 체크박스 UI */}
                     <div className={`mt-2 p-2 rounded flex items-center gap-2 transition-colors ${selectedNode.data.hoodType === 'enclosure' ? 'bg-red-50 border border-red-200 cursor-pointer' : 'bg-slate-100 border border-slate-200 opacity-50 cursor-not-allowed'}`}>
                       <input 
                         type="checkbox" 
@@ -521,7 +535,6 @@
                       </label>
                     </div>
 
-                    {/* 제어거리 & 법정제어풍속 & 개구면 입력 UI */}
                     <div className="grid grid-cols-2 gap-3 mt-4">
                       <div>
                         <label className="block text-xs font-bold mb-1 text-indigo-700">법정 제어풍속 (m/s)</label>
@@ -539,7 +552,6 @@
                       )}
                     </div>
 
-                    {/* ✅ 포위식 전용 개구면적 입력 필드 ✅ */}
                     {selectedNode.data.hoodType === 'enclosure' && (
                       <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                         <label className="block text-xs font-bold mb-2 text-blue-800">▶ 포위식 개구면 크기 (필요 배기량 산정용)</label>
@@ -564,7 +576,6 @@
                         className="w-full p-2 border-2 border-emerald-400 rounded text-sm outline-none focus:border-emerald-500 bg-emerald-50 text-emerald-900 font-bold" />
                     </div>
 
-                    {/* 4. 현재 배기량 산정 영역 분리 */}
                     <div className="pt-2">
                       <h2 className="text-sm font-bold text-slate-400 mb-3 border-t border-slate-200 pt-4">4. 현재 배기량 산정 (덕트 등 측정부)</h2>
                       <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
@@ -618,18 +629,19 @@
             </div>
           </div>
 
-          {/* 우측 도면 및 보고서 영역 */}
-          <div className="flex-1 bg-slate-200 overflow-y-auto relative p-4 lg:p-8 print:p-0 print:bg-white print:overflow-visible">
-            <div className="max-w-[210mm] min-h-[297mm] mx-auto bg-white shadow-2xl print:shadow-none print:w-full print:max-w-none print:m-0"
-                 style={{ padding: '20mm' }}>
+          {/* 우측 도면 및 보고서 영역 (인쇄 최적화를 위해 p-0 및 print:block 적용) */}
+          <div className="flex-1 bg-slate-200 overflow-y-auto relative p-4 lg:p-8 print:p-0 print:bg-white print:overflow-visible print:block">
+            {/* ✅ 인쇄 시 max-w-none, p-0 적용하여 기본 여백 사용 ✅ */}
+            <div className="w-full max-w-[210mm] min-h-[297mm] mx-auto bg-white shadow-2xl p-[20mm] print:max-w-none print:min-h-0 print:shadow-none print:p-0 print:m-0">
               
-              <div className="border-b-4 border-slate-800 pb-4 mb-6 text-center relative">
+              <div className="border-b-4 border-slate-800 pb-4 mb-6 text-center relative page-break-inside-avoid">
                 <h1 className="text-3xl font-black text-slate-900 tracking-tight">국소배기장치 자체검사 보고서</h1>
                 <div className="mt-3 text-lg font-bold text-slate-700 bg-slate-100 py-2 rounded">
                   {factoryName || "공장명을 입력해주세요"}
                 </div>
               </div>
 
+              {/* 도면 영역 - 페이지 중간 잘림 방지 */}
               <div className="mb-8 print:mb-6 page-break-inside-avoid">
                 <h2 className="text-lg font-black border-l-4 border-blue-600 pl-2 mb-3">1. 설비 Lay-out</h2>
                 <div className={`w-full h-[400px] bg-slate-50 border-2 ${tool === 'select' ? 'border-slate-300' : 'border-blue-400 border-dashed'} rounded-xl relative overflow-hidden print:border-slate-300 print:bg-white print:border-solid`}>
@@ -724,8 +736,9 @@
                 </div>
               </div>
 
+              {/* 표 영역 - 항목이 길면 자연스럽게 다음 페이지로 넘어가도록 처리 */}
               <div className="mb-8">
-                <div className="flex justify-between items-end border-l-4 border-blue-600 pl-2 mb-3">
+                <div className="flex justify-between items-end border-l-4 border-blue-600 pl-2 mb-3 page-break-inside-avoid">
                   <h2 className="text-lg font-black">2. 현장 모니터링 및 배기량 산출 결과</h2>
                   <div className="flex items-center gap-4 text-xs font-bold text-slate-600 bg-slate-50 px-3 py-1 rounded-full print:border print:border-slate-200">
                     <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-100 border border-blue-300 rounded-full inline-block"></span> 양호</span>
@@ -738,7 +751,7 @@
                     작성된 후드가 없습니다. 도면에 후드를 추가해주세요.
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto print:overflow-visible">
                     <table className="w-full border-collapse border border-slate-300 text-[11px] lg:text-xs">
                       <thead>
                         <tr className="bg-slate-100 text-slate-700">
@@ -759,7 +772,8 @@
                           const permitLabel = (data.hoodType === 'enclosure' && data.isPermitted) ? '(허가대상)' : '';
 
                           return (
-                            <tr key={hood.id} className={calc.isGood ? 'bg-blue-50/30' : 'bg-red-50/30'}>
+                            /* ✅ 테이블의 각 Row가 페이지 중간에 잘리지 않게 설정 ✅ */
+                            <tr key={hood.id} className={`${calc.isGood ? 'bg-blue-50/30' : 'bg-red-50/30'} page-break-inside-avoid`}>
                               <td className="border border-slate-300 p-2 text-center font-bold text-slate-500">{idx + 1}</td>
                               <td className="border border-slate-300 p-2">
                                 <div className="font-bold text-slate-800">{data.processName}</div>
@@ -800,8 +814,9 @@
                 )}
               </div>
 
+              {/* 요약 평가 영역 - 페이지 중간 잘림 방지 */}
               {hoodsData.length > 0 && (
-                <div className="border-t-2 border-slate-800 pt-6 mt-auto page-break-inside-avoid">
+                <div className="border-t-2 border-slate-800 pt-6 mt-6 page-break-inside-avoid">
                   <h2 className="text-lg font-black border-l-4 border-blue-600 pl-2 mb-4">3. 사업장 종합 평가</h2>
                   <div className="flex items-center justify-center gap-10 bg-slate-50 border border-slate-200 rounded-xl p-6">
                     <div className="relative w-32 h-32 transform -rotate-90">
