@@ -13,7 +13,7 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
-    /* ✅ 인쇄(A4) 최적화를 위한 전용 CSS ✅ */
+    /* 인쇄(A4) 최적화를 위한 전용 CSS */
     @media print {
       @page {
         size: A4 portrait;
@@ -58,6 +58,7 @@
     function App() {
       // === 1. 앱 전역 상태 ===
       const [factoryName, setFactoryName] = useState("");
+      const [useLayout, setUseLayout] = useState(true); // ✅ 도면 사용 여부 토글 상태
       const [nodes, setNodes] = useState([]);
       const [edges, setEdges] = useState([]);
       
@@ -89,6 +90,7 @@
 
       // === 2. 레이아웃(도면) 좌표 및 스냅(자석) 로직 ===
       const getMousePos = (e) => {
+        if (!useLayout || !svgRef.current) return { rawX: 0, rawY: 0, x: 0, y: 0 };
         const svg = svgRef.current;
         const CTM = svg.getScreenCTM();
         let clientX = e.clientX;
@@ -138,6 +140,7 @@
       };
 
       const handlePointerDown = (e) => {
+        if (!useLayout) return;
         const { x, y } = getMousePos(e);
         
         if (tool === 'select') {
@@ -145,18 +148,7 @@
           setSelectedEdgeId(null);
           return;
         } else if (tool === 'hood') {
-          const newNode = {
-            id: `hood-${Date.now()}`, type: 'hood', x, y,
-            data: {
-              processName: `공정-${nodes.filter(n => n.type === 'hood').length + 1}`, photo: null, 
-              hoodType: "enclosure", materialState: "gas", isPermitted: false, distanceX: 0, 
-              controlVelocity: 0.4, measuredControlVelocity: "", shape: "rect",
-              width: "", height: "", diameter: "", measuredVelocity: "",
-              openingWidth: "", openingHeight: ""
-            }
-          };
-          setNodes([...nodes, newNode]);
-          setSelectedNodeId(newNode.id);
+          createHood(x, y);
           setTool('select');
         } else if (tool === 'fan') {
           const newNode = { id: `fan-${Date.now()}`, type: 'fan', x, y, data: {} };
@@ -177,7 +169,24 @@
         }
       };
 
+      // ✅ 후드 생성 공통 함수 (도면 클릭 or 버튼 클릭 시 사용)
+      const createHood = (x = 110, y = 110) => {
+        const newNode = {
+          id: `hood-${Date.now()}`, type: 'hood', x, y,
+          data: {
+            processName: `공정-${nodes.filter(n => n.type === 'hood').length + 1}`, photo: null, 
+            hoodType: "enclosure", materialState: "gas", isPermitted: false, distanceX: 0, 
+            controlVelocity: 0.4, measuredControlVelocity: "", shape: "rect",
+            width: "", height: "", diameter: "", measuredVelocity: "",
+            openingWidth: "", openingHeight: ""
+          }
+        };
+        setNodes([...nodes, newNode]);
+        setSelectedNodeId(newNode.id);
+      };
+
       const handlePointerMove = (e) => {
+        if (!useLayout) return;
         let { x, y, rawX, rawY } = getMousePos(e);
 
         if (draggingNodeId) {
@@ -230,6 +239,7 @@
       };
 
       const handlePointerUp = (e) => {
+        if (!useLayout) return;
         if (draggingNodeId || draggingEdgeId) {
           setDraggingNodeId(null);
           setDraggingEdgeId(null);
@@ -282,6 +292,7 @@
       };
 
       const handleNodePointerDown = (e, id) => {
+        if (!useLayout) return;
         e.stopPropagation();
         if (tool === 'select') {
           setSelectedEdgeId(null);
@@ -294,6 +305,7 @@
       };
 
       const handleEdgePointerDown = (e, id) => {
+        if (!useLayout) return;
         e.stopPropagation();
         if (tool === 'select') {
           setSelectedNodeId(null);
@@ -421,30 +433,68 @@
                     value={factoryName} onChange={e => setFactoryName(e.target.value)}
                     className="w-full pl-10 p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700" />
                 </div>
+                
+                {/* ✅ 도면 사용 여부 스위치 추가 ✅ */}
+                <div className="mt-3 flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-slate-700">도면(Lay-out) 사용</span>
+                    <span className="text-[10px] text-slate-500">끄면 도면 없이 후드 제원만 관리합니다</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={useLayout} onChange={e => {
+                      setUseLayout(e.target.checked);
+                      if (!e.target.checked) setTool('select');
+                    }} />
+                    <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
               </div>
 
               <hr className="border-slate-100" />
 
-              <div>
-                <h2 className="text-sm font-bold text-slate-400 mb-2 flex justify-between items-center">
-                  2. Lay-out (도면) 도구
-                  <span className="text-xs font-normal text-slate-500">우측 캔버스에 클릭하여 배치</span>
-                </h2>
-                <div className="grid grid-cols-4 gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
-                  <button onClick={() => setTool('select')} className={`flex flex-col items-center p-2 rounded ${tool === 'select' ? 'bg-blue-100 text-blue-700 border-blue-300 border' : 'hover:bg-slate-200'}`}>
-                    <MousePointer2 className="w-5 h-5 mb-1" /> <span className="text-[10px] font-bold">선택/이동</span>
-                  </button>
-                  <button onClick={() => setTool('fan')} className={`flex flex-col items-center p-2 rounded ${tool === 'fan' ? 'bg-blue-100 text-blue-700 border-blue-300 border' : 'hover:bg-slate-200'}`}>
-                    <Fan className="w-5 h-5 mb-1" /> <span className="text-[10px] font-bold">송풍기</span>
-                  </button>
-                  <button onClick={() => setTool('hood')} className={`flex flex-col items-center p-2 rounded ${tool === 'hood' ? 'bg-blue-100 text-blue-700 border-blue-300 border' : 'hover:bg-slate-200'}`}>
-                    <Square className="w-5 h-5 mb-1" /> <span className="text-[10px] font-bold">후드</span>
-                  </button>
-                  <button onClick={() => setTool('line')} className={`flex flex-col items-center p-2 rounded ${tool === 'line' ? 'bg-blue-100 text-blue-700 border-blue-300 border' : 'hover:bg-slate-200'}`}>
-                    <Minus className="w-5 h-5 mb-1" /> <span className="text-[10px] font-bold">직선(덕트)</span>
-                  </button>
+              {/* ✅ 도면 켜짐/꺼짐에 따라 UI 분기 ✅ */}
+              {useLayout ? (
+                <div>
+                  <h2 className="text-sm font-bold text-slate-400 mb-2 flex justify-between items-center">
+                    2. Lay-out (도면) 도구
+                    <span className="text-xs font-normal text-slate-500">우측 캔버스에 클릭하여 배치</span>
+                  </h2>
+                  <div className="grid grid-cols-4 gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                    <button onClick={() => setTool('select')} className={`flex flex-col items-center p-2 rounded ${tool === 'select' ? 'bg-blue-100 text-blue-700 border-blue-300 border' : 'hover:bg-slate-200'}`}>
+                      <MousePointer2 className="w-5 h-5 mb-1" /> <span className="text-[10px] font-bold">선택/이동</span>
+                    </button>
+                    <button onClick={() => setTool('fan')} className={`flex flex-col items-center p-2 rounded ${tool === 'fan' ? 'bg-blue-100 text-blue-700 border-blue-300 border' : 'hover:bg-slate-200'}`}>
+                      <Fan className="w-5 h-5 mb-1" /> <span className="text-[10px] font-bold">송풍기</span>
+                    </button>
+                    <button onClick={() => setTool('hood')} className={`flex flex-col items-center p-2 rounded ${tool === 'hood' ? 'bg-blue-100 text-blue-700 border-blue-300 border' : 'hover:bg-slate-200'}`}>
+                      <Square className="w-5 h-5 mb-1" /> <span className="text-[10px] font-bold">후드</span>
+                    </button>
+                    <button onClick={() => setTool('line')} className={`flex flex-col items-center p-2 rounded ${tool === 'line' ? 'bg-blue-100 text-blue-700 border-blue-300 border' : 'hover:bg-slate-200'}`}>
+                      <Minus className="w-5 h-5 mb-1" /> <span className="text-[10px] font-bold">직선(덕트)</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <h2 className="text-sm font-bold text-slate-400 mb-2 flex justify-between items-center">
+                    2. 후드 목록 관리
+                    <button onClick={() => createHood()} className="text-[11px] bg-blue-100 text-blue-700 px-2 py-1 rounded font-bold border border-blue-300 hover:bg-blue-200 transition-colors">
+                      + 새 후드 추가
+                    </button>
+                  </h2>
+                  {hoodsData.length === 0 ? (
+                    <div className="text-xs text-slate-400 bg-slate-50 p-4 rounded border border-dashed border-slate-300 text-center">등록된 후드가 없습니다.</div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      {nodes.filter(n => n.type === 'hood').map(n => (
+                        <button key={n.id} onClick={() => setSelectedNodeId(n.id)} className={`p-2 text-xs font-bold rounded border text-left truncate transition-colors ${selectedNodeId === n.id ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
+                          {n.data.processName}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <hr className="border-slate-100" />
 
@@ -452,7 +502,7 @@
                 <div className="flex justify-between items-center mb-3">
                   <h2 className="text-sm font-bold text-slate-400">3. 후드 제원</h2>
                   {(selectedNodeId || selectedEdgeId) && (
-                    <button onClick={deleteSelected} className="text-red-500 hover:text-red-700 flex items-center gap-1 text-xs font-bold">
+                    <button onClick={deleteSelected} className="text-red-500 hover:text-red-700 flex items-center gap-1 text-xs font-bold bg-red-50 px-2 py-1 rounded">
                       <Trash2 className="w-3 h-3" /> 삭제
                     </button>
                   )}
@@ -460,7 +510,7 @@
 
                 {!selectedNode && !selectedEdgeId ? (
                   <div className="bg-slate-50 border border-dashed border-slate-300 rounded-lg p-6 text-center text-slate-400 text-sm">
-                    도면에서 후드를 선택하면<br/>제원을 입력할 수 있습니다.
+                    {useLayout ? "도면에서 후드를 선택하면" : "후드 목록에서 선택하거나 추가하면"}<br/>제원을 입력할 수 있습니다.
                   </div>
                 ) : selectedEdgeId || (selectedNode && selectedNode.type !== 'hood') ? (
                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-6 text-center text-slate-500 text-sm font-bold">
@@ -632,104 +682,107 @@
                 </div>
               </div>
 
-              <div className="mb-8 print:mb-6 page-break-inside-avoid">
-                <h2 className="text-lg font-black border-l-4 border-blue-600 pl-2 mb-3">1. 설비 Lay-out</h2>
-                <div className={`w-full h-[400px] bg-slate-50 border-2 ${tool === 'select' ? 'border-slate-300' : 'border-blue-400 border-dashed'} rounded-xl relative overflow-hidden print:border-slate-300 print:bg-white print:border-solid`}>
-                  
-                  <svg 
-                    ref={svgRef}
-                    className={`w-full h-full ${tool !== 'select' ? 'cursor-crosshair' : 'cursor-default'}`}
-                    onPointerDown={handlePointerDown}
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={handlePointerUp}
-                    onPointerLeave={handlePointerUp}
-                  >
-                    <defs>
-                      <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                        <circle cx="10" cy="10" r="1" fill="#cbd5e1" className="print:hidden"/>
-                      </pattern>
-                    </defs>
-                    <rect width="100%" height="100%" fill="url(#grid)" className="print:hidden" />
+              {/* ✅ 도면 사용(useLayout)이 켜져 있을 때만 인쇄/화면에 렌더링 ✅ */}
+              {useLayout && (
+                <div className="mb-8 print:mb-6 page-break-inside-avoid">
+                  <h2 className="text-lg font-black border-l-4 border-blue-600 pl-2 mb-3">1. 설비 Lay-out</h2>
+                  <div className={`w-full h-[400px] bg-slate-50 border-2 ${tool === 'select' ? 'border-slate-300' : 'border-blue-400 border-dashed'} rounded-xl relative overflow-hidden print:border-slate-300 print:bg-white print:border-solid`}>
+                    
+                    <svg 
+                      ref={svgRef}
+                      className={`w-full h-full ${tool !== 'select' ? 'cursor-crosshair' : 'cursor-default'}`}
+                      onPointerDown={handlePointerDown}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                      onPointerLeave={handlePointerUp}
+                    >
+                      <defs>
+                        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                          <circle cx="10" cy="10" r="1" fill="#cbd5e1" className="print:hidden"/>
+                        </pattern>
+                      </defs>
+                      <rect width="100%" height="100%" fill="url(#grid)" className="print:hidden" />
 
-                    {edges.map(e => {
-                      const fromNode = nodes.find(n => n.id === e.from);
-                      const toNode = nodes.find(n => n.id === e.to);
-                      if(!fromNode || !toNode) return null;
-                      const isSelected = selectedEdgeId === e.id;
-                      return (
-                        <g key={e.id}>
-                          <line x1={fromNode.x} y1={fromNode.y} x2={toNode.x} y2={toNode.y} 
-                                stroke="transparent" strokeWidth="20" 
-                                className={tool === 'select' ? "cursor-move print:hidden" : "pointer-events-none"}
-                                onPointerDown={(ev) => handleEdgePointerDown(ev, e.id)} />
-                          <line x1={fromNode.x} y1={fromNode.y} x2={toNode.x} y2={toNode.y} 
-                                stroke={isSelected ? "#3b82f6" : "#475569"} strokeWidth="4" strokeLinecap="round"
-                                className="pointer-events-none" />
-                        </g>
-                      );
-                    })}
+                      {edges.map(e => {
+                        const fromNode = nodes.find(n => n.id === e.from);
+                        const toNode = nodes.find(n => n.id === e.to);
+                        if(!fromNode || !toNode) return null;
+                        const isSelected = selectedEdgeId === e.id;
+                        return (
+                          <g key={e.id}>
+                            <line x1={fromNode.x} y1={fromNode.y} x2={toNode.x} y2={toNode.y} 
+                                  stroke="transparent" strokeWidth="20" 
+                                  className={tool === 'select' ? "cursor-move print:hidden" : "pointer-events-none"}
+                                  onPointerDown={(ev) => handleEdgePointerDown(ev, e.id)} />
+                            <line x1={fromNode.x} y1={fromNode.y} x2={toNode.x} y2={toNode.y} 
+                                  stroke={isSelected ? "#3b82f6" : "#475569"} strokeWidth="4" strokeLinecap="round"
+                                  className="pointer-events-none" />
+                          </g>
+                        );
+                      })}
 
-                    {drawingEdge && (
-                      <g className="pointer-events-none">
-                        {drawingEdge.cornerX !== null ? (
-                          <>
-                            <line x1={nodes.find(n=>n.id===drawingEdge.startNodeId)?.x} y1={nodes.find(n=>n.id===drawingEdge.startNodeId)?.y} 
-                                  x2={drawingEdge.cornerX} y2={drawingEdge.cornerY} stroke="#3b82f6" strokeWidth="4" strokeDasharray="5,5" />
-                            <line x1={drawingEdge.cornerX} y1={drawingEdge.cornerY} 
-                                  x2={drawingEdge.x} y2={drawingEdge.y} stroke="#3b82f6" strokeWidth="4" strokeDasharray="5,5" />
-                          </>
-                        ) : (
-                          <line x1={nodes.find(n=>n.id===drawingEdge.startNodeId)?.x} y1={nodes.find(n=>n.id===drawingEdge.startNodeId)?.y} 
-                                x2={drawingEdge.x} y2={drawingEdge.y} stroke="#3b82f6" strokeWidth="4" strokeDasharray="5,5" />
-                        )}
-                        {drawingEdge.snapTarget?.type === 'edge' && <circle cx={drawingEdge.x} cy={drawingEdge.y} r="6" fill="#ef4444" />}
-                        {drawingEdge.snapTarget?.type === 'node' && <circle cx={drawingEdge.x} cy={drawingEdge.y} r="14" fill="none" stroke="#ef4444" strokeWidth="2" />}
-                      </g>
-                    )}
-
-                    {nodes.map(n => {
-                      const isSelected = n.id === selectedNodeId;
-                      if (n.type === 'joint') {
-                        return <circle key={n.id} cx={n.x} cy={n.y} r="10" fill="transparent" 
-                                       onPointerDown={(e) => handleNodePointerDown(e, n.id)} 
-                                       className={tool === 'select' ? "cursor-move hover:fill-blue-500/20 print:hidden" : "cursor-pointer print:hidden"} />;
-                      }
-                      return (
-                        <g key={n.id} transform={`translate(${n.x - 12}, ${n.y - 12})`} 
-                           onPointerDown={(e) => handleNodePointerDown(e, n.id)} 
-                           className={tool === 'select' ? "cursor-move" : "cursor-pointer"}>
-                          <rect width="24" height="24" rx="4" 
-                                fill={n.type === 'fan' ? '#f1f5f9' : (isSelected ? '#eff6ff' : '#ffffff')} 
-                                stroke={isSelected ? '#3b82f6' : '#94a3b8'} strokeWidth={isSelected ? "2" : "1.5"} className="print:stroke-slate-500 print:stroke-[1.5]" />
-                          {n.type === 'fan' ? (
-                            <Fan x="4" y="4" width="16" height="16" className="text-slate-700" />
-                          ) : (
+                      {drawingEdge && (
+                        <g className="pointer-events-none">
+                          {drawingEdge.cornerX !== null ? (
                             <>
-                              <Square x="4" y="4" width="16" height="16" className="text-blue-600" />
-                              <text x="12" y="34" textAnchor="middle" className="text-[8px] font-bold fill-slate-700 print:block">
-                                {n.data.processName}
-                              </text>
+                              <line x1={nodes.find(n=>n.id===drawingEdge.startNodeId)?.x} y1={nodes.find(n=>n.id===drawingEdge.startNodeId)?.y} 
+                                    x2={drawingEdge.cornerX} y2={drawingEdge.cornerY} stroke="#3b82f6" strokeWidth="4" strokeDasharray="5,5" />
+                              <line x1={drawingEdge.cornerX} y1={drawingEdge.cornerY} 
+                                    x2={drawingEdge.x} y2={drawingEdge.y} stroke="#3b82f6" strokeWidth="4" strokeDasharray="5,5" />
                             </>
+                          ) : (
+                            <line x1={nodes.find(n=>n.id===drawingEdge.startNodeId)?.x} y1={nodes.find(n=>n.id===drawingEdge.startNodeId)?.y} 
+                                  x2={drawingEdge.x} y2={drawingEdge.y} stroke="#3b82f6" strokeWidth="4" strokeDasharray="5,5" />
                           )}
+                          {drawingEdge.snapTarget?.type === 'edge' && <circle cx={drawingEdge.x} cy={drawingEdge.y} r="6" fill="#ef4444" />}
+                          {drawingEdge.snapTarget?.type === 'node' && <circle cx={drawingEdge.x} cy={drawingEdge.y} r="14" fill="none" stroke="#ef4444" strokeWidth="2" />}
                         </g>
-                      );
-                    })}
-                  </svg>
-                  {nodes.length === 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none print:hidden">
-                      <div className="bg-white/80 p-4 rounded-lg font-bold text-slate-500 flex flex-col items-center gap-2">
-                        <MousePointer2 className="w-8 h-8 opacity-50" />
-                        좌측 도구를 이용해 레이아웃을 작성하세요.
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+                      )}
 
-              {/* 표 영역 - 항목이 길면 자연스럽게 다음 페이지로 넘어가도록 처리 */}
+                      {nodes.map(n => {
+                        const isSelected = n.id === selectedNodeId;
+                        if (n.type === 'joint') {
+                          return <circle key={n.id} cx={n.x} cy={n.y} r="10" fill="transparent" 
+                                         onPointerDown={(e) => handleNodePointerDown(e, n.id)} 
+                                         className={tool === 'select' ? "cursor-move hover:fill-blue-500/20 print:hidden" : "cursor-pointer print:hidden"} />;
+                        }
+                        return (
+                          <g key={n.id} transform={`translate(${n.x - 12}, ${n.y - 12})`} 
+                             onPointerDown={(e) => handleNodePointerDown(e, n.id)} 
+                             className={tool === 'select' ? "cursor-move" : "cursor-pointer"}>
+                            <rect width="24" height="24" rx="4" 
+                                  fill={n.type === 'fan' ? '#f1f5f9' : (isSelected ? '#eff6ff' : '#ffffff')} 
+                                  stroke={isSelected ? '#3b82f6' : '#94a3b8'} strokeWidth={isSelected ? "2" : "1.5"} className="print:stroke-slate-500 print:stroke-[1.5]" />
+                            {n.type === 'fan' ? (
+                              <Fan x="4" y="4" width="16" height="16" className="text-slate-700" />
+                            ) : (
+                              <>
+                                <Square x="4" y="4" width="16" height="16" className="text-blue-600" />
+                                <text x="12" y="34" textAnchor="middle" className="text-[8px] font-bold fill-slate-700 print:block">
+                                  {n.data.processName}
+                                </text>
+                              </>
+                            )}
+                          </g>
+                        );
+                      })}
+                    </svg>
+                    {nodes.length === 0 && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none print:hidden">
+                        <div className="bg-white/80 p-4 rounded-lg font-bold text-slate-500 flex flex-col items-center gap-2">
+                          <MousePointer2 className="w-8 h-8 opacity-50" />
+                          좌측 도구를 이용해 레이아웃을 작성하세요.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="mb-8">
+                {/* ✅ 번호 동적 반영 (도면이 없으면 1번으로 변경) ✅ */}
                 <div className="flex justify-between items-end border-l-4 border-blue-600 pl-2 mb-3 page-break-inside-avoid">
-                  <h2 className="text-lg font-black">2. 현장 모니터링 및 배기량 산출 결과</h2>
+                  <h2 className="text-lg font-black">{useLayout ? '2.' : '1.'} 현장 모니터링 및 배기량 산출 결과</h2>
                   <div className="flex items-center gap-4 text-xs font-bold text-slate-600 bg-slate-50 px-3 py-1 rounded-full print:border print:border-slate-200">
                     <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-100 border border-blue-300 rounded-full inline-block"></span> 양호</span>
                     <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-100 border border-red-300 rounded-full inline-block"></span> 불량</span>
@@ -738,14 +791,13 @@
 
                 {hoodsData.length === 0 ? (
                   <div className="p-8 border border-slate-200 rounded-lg text-center text-slate-400 text-sm print:hidden">
-                    작성된 후드가 없습니다. 도면에 후드를 추가해주세요.
+                    등록된 후드가 없습니다. 좌측에서 후드를 추가해주세요.
                   </div>
                 ) : (
                   <div className="overflow-x-auto print:overflow-visible">
                     <table className="w-full border-collapse border border-slate-300 text-[11px] lg:text-xs">
                       <thead>
                         <tr className="bg-slate-100 text-slate-700">
-                          {/* ✅ 현장 사진을 위한 Column 추가 ✅ */}
                           <th className="border border-slate-300 p-2 text-center w-10">No</th>
                           <th className="border border-slate-300 p-2 text-center w-24">현장 사진</th>
                           <th className="border border-slate-300 p-2 text-left">공정명 / 형식</th>
@@ -767,7 +819,6 @@
                             <tr key={hood.id} className={`${calc.isGood ? 'bg-blue-50/30' : 'bg-red-50/30'} page-break-inside-avoid`}>
                               <td className="border border-slate-300 p-2 text-center font-bold text-slate-500">{idx + 1}</td>
                               
-                              {/* ✅ 현장 사진 데이터 바인딩 ✅ */}
                               <td className="border border-slate-300 p-2 text-center align-middle">
                                 {data.photo ? (
                                   <img src={data.photo} alt="현장사진" className="w-16 h-12 object-cover mx-auto rounded border border-slate-200 shadow-sm print:w-20 print:h-16" />
@@ -815,10 +866,10 @@
                 )}
               </div>
 
-              {/* 요약 평가 영역 - 페이지 중간 잘림 방지 */}
               {hoodsData.length > 0 && (
                 <div className="border-t-2 border-slate-800 pt-6 mt-6 page-break-inside-avoid">
-                  <h2 className="text-lg font-black border-l-4 border-blue-600 pl-2 mb-4">3. 사업장 종합 평가</h2>
+                  {/* ✅ 번호 동적 반영 (도면이 없으면 2번으로 변경) ✅ */}
+                  <h2 className="text-lg font-black border-l-4 border-blue-600 pl-2 mb-4">{useLayout ? '3.' : '2.'} 사업장 종합 평가</h2>
                   <div className="flex items-center justify-center gap-10 bg-slate-50 border border-slate-200 rounded-xl p-6">
                     <div className="relative w-32 h-32 transform -rotate-90">
                       <svg width="100%" height="100%" viewBox="0 0 36 36" className="drop-shadow-sm">
