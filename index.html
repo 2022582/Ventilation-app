@@ -47,30 +47,28 @@
       
       const [tool, setTool] = useState("select"); 
       const [selectedNodeId, setSelectedNodeId] = useState(null);
-      const [selectedEdgeId, setSelectedEdgeId] = useState(null); // 선(Edge) 선택 상태
+      const [selectedEdgeId, setSelectedEdgeId] = useState(null);
       
       const [draggingNodeId, setDraggingNodeId] = useState(null);
-      const [draggingEdgeId, setDraggingEdgeId] = useState(null); // 선(Edge) 드래그 상태
+      const [draggingEdgeId, setDraggingEdgeId] = useState(null);
 
-      const [drawingEdge, setDrawingEdge] = useState(null); // { startNodeId, x, y, cornerX, cornerY, snapTarget }
+      const [drawingEdge, setDrawingEdge] = useState(null);
       const svgRef = useRef(null);
 
-      // KOSHA 기준 법정 제어풍속 자동 산출 로직 (첨부 표 기준 정확히 반영)
+      // KOSHA 기준 법정 제어풍속 자동 산출 로직
       const getAutoControlVelocity = (type, state, isPermitted) => {
-        // 허가대상 유해물질 (포위식일 때만 적용됨)
         if (type === 'enclosure' && isPermitted) {
           return state === 'gas' ? 0.5 : 1.0;
         }
         
-        // 일반 유해물질 기준 (표 반영)
         if (state === 'gas') {
           if (type === 'enclosure') return 0.4;
-          if (type === 'ext_up') return 1.0; // 가스 + 외부상방형
-          return 0.5; // 외부식 측방형, 하방형
-        } else { // 입자상 (particle)
+          if (type === 'ext_up') return 1.0;
+          return 0.5;
+        } else {
           if (type === 'enclosure') return 0.7;
-          if (type === 'ext_up') return 1.2; // 입자 + 외부상방형
-          return 1.0; // 외부식 측방형, 하방형
+          if (type === 'ext_up') return 1.2;
+          return 1.0;
         }
       };
 
@@ -87,7 +85,6 @@
         const rawX = (clientX - CTM.e) / CTM.a;
         const rawY = (clientY - CTM.f) / CTM.d;
         
-        // 모든 좌표를 20px Grid에 완벽하게 스냅시켜 직각 유지
         return {
           rawX, rawY,
           x: Math.round((rawX - 10) / 20) * 20 + 10,
@@ -96,11 +93,9 @@
       };
 
       const findSnapTarget = (rawX, rawY, excludeNodeId) => {
-        // 1. 노드(후드, 조인트 등) 중앙 스냅
         const snapNode = nodes.find(n => n.id !== excludeNodeId && Math.abs(n.x - rawX) < 20 && Math.abs(n.y - rawY) < 20);
         if (snapNode) return { type: 'node', node: snapNode, x: snapNode.x, y: snapNode.y };
 
-        // 2. 다른 직선(Edge)에 T자형(수직) 스냅
         for (let e of edges) {
           if (e.from === excludeNodeId || e.to === excludeNodeId) continue;
           const fromNode = nodes.find(n => n.id === e.from);
@@ -141,7 +136,8 @@
               processName: `공정-${nodes.filter(n => n.type === 'hood').length + 1}`, photo: null, 
               hoodType: "enclosure", materialState: "gas", isPermitted: false, distanceX: 0, 
               controlVelocity: 0.4, measuredControlVelocity: "", shape: "rect",
-              width: 0, height: 0, diameter: "", measuredVelocity: ""
+              width: "", height: "", diameter: "", measuredVelocity: "",
+              openingWidth: "", openingHeight: "" // 포위식 개구면적 입력용 필드 추가
             }
           };
           setNodes([...nodes, newNode]);
@@ -169,13 +165,11 @@
       const handlePointerMove = (e) => {
         let { x, y, rawX, rawY } = getMousePos(e);
 
-        // 노드 드래그 (조인트 위치 이동)
         if (draggingNodeId) {
           setNodes(prev => prev.map(n => n.id === draggingNodeId ? { ...n, x, y } : n));
           return;
         }
         
-        // 직선(배관) 드래그 (직각 유지 통째로 이동)
         if (draggingEdgeId) {
           const edge = edges.find(ed => ed.id === draggingEdgeId);
           if (!edge) return;
@@ -194,12 +188,10 @@
           return;
         }
 
-        // 직선 그리기
         if (!drawingEdge) return;
         const startNode = nodes.find(n => n.id === drawingEdge.startNodeId);
         if (!startNode) return;
 
-        // 기본적으로 마우스 방향에 따라 직각 강제
         const isHorizontal = Math.abs(rawX - startNode.x) > Math.abs(rawY - startNode.y);
         let currentX = isHorizontal ? x : startNode.x;
         let currentY = isHorizontal ? startNode.y : y;
@@ -213,7 +205,6 @@
           currentY = snapTarget.y;
           const isAligned = (startNode.x === currentX || startNode.y === currentY);
           
-          // 타겟과 일직선이 아닌 경우, 직각으로 연결되도록 중간 코너(Elbow) 자동 생성
           if (!isAligned) {
             cornerX = isHorizontal ? currentX : startNode.x;
             cornerY = isHorizontal ? startNode.y : currentY;
@@ -237,7 +228,6 @@
         let newEdges = [...edges];
         let lastEndId = startNode.id;
 
-        // 꺾이는 지점(Elbow)이 있으면 조인트 추가
         if (drawingEdge.cornerX !== null) {
           const cornerNode = { id: `joint-${Date.now()}-c`, type: 'joint', x: drawingEdge.cornerX, y: drawingEdge.cornerY, data: {} };
           newNodes.push(cornerNode);
@@ -247,7 +237,6 @@
 
         let targetNodeId;
 
-        // 1. 노드나 직선 중간에 스냅하여 연결
         if (drawingEdge.snapTarget) {
           if (drawingEdge.snapTarget.type === 'node') {
             targetNodeId = drawingEdge.snapTarget.node.id;
@@ -256,20 +245,17 @@
             const splitJoint = { id: `joint-${Date.now()}-s`, type: 'joint', x: drawingEdge.x, y: drawingEdge.y, data: {} };
             newNodes.push(splitJoint);
             
-            // 기존 직선을 2개로 쪼개서 T자 연결 완성
             newEdges = newEdges.filter(e => e.id !== splitEdge.id);
             newEdges.push({ id: `edge-${Date.now()}-s1`, from: splitEdge.from, to: splitJoint.id });
             newEdges.push({ id: `edge-${Date.now()}-s2`, from: splitJoint.id, to: splitEdge.to });
             targetNodeId = splitJoint.id;
           }
         } else {
-          // 2. 빈 공간에서 마우스를 뗄 경우
           const endJoint = { id: `joint-${Date.now()}-e`, type: 'joint', x: drawingEdge.x, y: drawingEdge.y, data: {} };
           newNodes.push(endJoint);
           targetNodeId = endJoint.id;
         }
 
-        // 선 길이가 0이 아닌 경우에만 엣지 추가
         if (lastEndId !== targetNodeId) {
           newEdges.push({ id: `edge-${Date.now()}-e`, from: lastEndId, to: targetNodeId });
         }
@@ -318,12 +304,10 @@
           if (n.id === selectedNodeId) {
             let newData = { ...n.data, [field]: value };
             
-            // 포위식이 아닌 다른 후드 형식으로 변경 시 허가대상 체크 자동 해제
             if (field === 'hoodType' && value !== 'enclosure') {
               newData.isPermitted = false;
             }
             
-            // 값 변경 시 법정 제어풍속 재계산
             if (['hoodType', 'materialState', 'isPermitted'].includes(field) || (field === 'hoodType' && newData.isPermitted)) {
               newData.controlVelocity = getAutoControlVelocity(
                 newData.hoodType, 
@@ -338,7 +322,9 @@
       };
 
       const calculateResult = (data) => {
-        const { hoodType, distanceX, controlVelocity, measuredControlVelocity, shape, width, height, diameter, measuredVelocity } = data;
+        const { hoodType, distanceX, controlVelocity, measuredControlVelocity, shape, width, height, diameter, measuredVelocity, openingWidth, openingHeight } = data;
+        
+        // 1. 측정부(덕트 등) 면적 계산 (현재 배기량용)
         let area = 0;
         if (shape === 'rect') {
           area = (parseFloat(width) || 0) * (parseFloat(height) || 0); // 사각형 m단위
@@ -351,10 +337,20 @@
         const vm = parseFloat(measuredVelocity) || 0;
         const x = parseFloat(distanceX) || 0;
 
+        // 2. 필요 배기량(requiredQ) 산출 로직
+        let openingArea = (parseFloat(openingWidth) || 0) * (parseFloat(openingHeight) || 0);
         let requiredQ = 0;
-        if (hoodType === 'enclosure') requiredQ = 60 * vc * area;
-        else requiredQ = 60 * vc * (10 * Math.pow(x, 2) + area);
 
+        if (hoodType === 'enclosure') {
+          // 포위식: 필요배기량 = 60 * 법정풍속 * 포위식 개구면적
+          requiredQ = 60 * vc * openingArea;
+        } else {
+          // 외부식: 필요배기량 = 60 * 법정풍속 * (10X^2 + A)
+          // (여기서 A는 측정부 면적인 area를 그대로 활용하도록 유지)
+          requiredQ = 60 * vc * (10 * Math.pow(x, 2) + area);
+        }
+
+        // 3. 현재 배기량(currentQ) 산출 로직
         const currentQ = 60 * vm * area;
 
         const isVelocityGood = vmc >= vc;
@@ -362,7 +358,10 @@
         const isGood = isVelocityGood && isVolumeGood && currentQ > 0;
 
         return { 
-          area: area.toFixed(3), requiredQ: requiredQ.toFixed(2), currentQ: currentQ.toFixed(2), 
+          area: area.toFixed(3), 
+          openingArea: openingArea.toFixed(3), 
+          requiredQ: requiredQ.toFixed(2), 
+          currentQ: currentQ.toFixed(2), 
           isVelocityGood, isVolumeGood, isGood 
         };
       };
@@ -507,7 +506,7 @@
                       </div>
                     </div>
 
-                    {/* ✅ 포위식/부스식일 때만 활성화되는 체크박스 UI ✅ */}
+                    {/* 포위식/부스식일 때만 활성화되는 체크박스 UI */}
                     <div className={`mt-2 p-2 rounded flex items-center gap-2 transition-colors ${selectedNode.data.hoodType === 'enclosure' ? 'bg-red-50 border border-red-200 cursor-pointer' : 'bg-slate-100 border border-slate-200 opacity-50 cursor-not-allowed'}`}>
                       <input 
                         type="checkbox" 
@@ -522,22 +521,44 @@
                       </label>
                     </div>
 
+                    {/* 제어거리 & 법정제어풍속 & 개구면 입력 UI */}
                     <div className="grid grid-cols-2 gap-3 mt-4">
-                      <div>
-                        <label className="block text-xs font-bold mb-1">제어거리 X (m)</label>
-                        <input type="number" step="0.1" value={selectedNode.data.distanceX} 
-                          onChange={e => updateNodeData('distanceX', e.target.value)}
-                          disabled={selectedNode.data.hoodType === 'enclosure'}
-                          className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-400" />
-                      </div>
                       <div>
                         <label className="block text-xs font-bold mb-1 text-indigo-700">법정 제어풍속 (m/s)</label>
                         <input type="number" step="0.1" value={selectedNode.data.controlVelocity} onChange={e => updateNodeData('controlVelocity', e.target.value)}
                           className="w-full p-2 border border-indigo-300 rounded text-sm outline-none focus:border-indigo-500 bg-indigo-50 text-indigo-900 font-bold" />
                       </div>
+                      
+                      {selectedNode.data.hoodType !== 'enclosure' && (
+                        <div>
+                          <label className="block text-xs font-bold mb-1">제어거리 X (m)</label>
+                          <input type="number" step="0.1" value={selectedNode.data.distanceX} 
+                            onChange={e => updateNodeData('distanceX', e.target.value)}
+                            className="w-full p-2 border border-slate-300 rounded text-sm outline-none focus:border-blue-500" />
+                        </div>
+                      )}
                     </div>
+
+                    {/* ✅ 포위식 전용 개구면적 입력 필드 ✅ */}
+                    {selectedNode.data.hoodType === 'enclosure' && (
+                      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <label className="block text-xs font-bold mb-2 text-blue-800">▶ 포위식 개구면 크기 (필요 배기량 산정용)</label>
+                        <div className="flex gap-2">
+                          <div className="flex-1 flex items-center gap-1">
+                            <input type="number" step="0.1" placeholder="가로" value={selectedNode.data.openingWidth || ""} onChange={e => updateNodeData('openingWidth', e.target.value)}
+                              className="w-full p-2 border border-blue-300 rounded text-sm outline-none focus:border-blue-500 bg-white" />
+                            <span className="text-xs font-bold text-blue-700">m</span>
+                          </div>
+                          <div className="flex-1 flex items-center gap-1">
+                            <input type="number" step="0.1" placeholder="세로" value={selectedNode.data.openingHeight || ""} onChange={e => updateNodeData('openingHeight', e.target.value)}
+                              className="w-full p-2 border border-blue-300 rounded text-sm outline-none focus:border-blue-500 bg-white" />
+                            <span className="text-xs font-bold text-blue-700">m</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     
-                    <div className="mt-2">
+                    <div className="mt-4">
                       <label className="block text-xs font-bold mb-1 text-emerald-700">▶ 현장 측정 제어풍속 (m/s)</label>
                       <input type="number" step="0.1" placeholder="현장에서 측정한 제어풍속" value={selectedNode.data.measuredControlVelocity} onChange={e => updateNodeData('measuredControlVelocity', e.target.value)}
                         className="w-full p-2 border-2 border-emerald-400 rounded text-sm outline-none focus:border-emerald-500 bg-emerald-50 text-emerald-900 font-bold" />
@@ -545,7 +566,7 @@
 
                     {/* 4. 현재 배기량 산정 영역 분리 */}
                     <div className="pt-2">
-                      <h2 className="text-sm font-bold text-slate-400 mb-3 border-t border-slate-200 pt-4">4. 현재 배기량 산정</h2>
+                      <h2 className="text-sm font-bold text-slate-400 mb-3 border-t border-slate-200 pt-4">4. 현재 배기량 산정 (덕트 등 측정부)</h2>
                       <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
                         <div className="flex gap-4">
                           <label className="text-xs font-bold flex items-center gap-1 cursor-pointer">
@@ -628,7 +649,6 @@
                     </defs>
                     <rect width="100%" height="100%" fill="url(#grid)" className="print:hidden" />
 
-                    {/* Edge(선) 렌더링 영역 */}
                     {edges.map(e => {
                       const fromNode = nodes.find(n => n.id === e.from);
                       const toNode = nodes.find(n => n.id === e.to);
@@ -647,7 +667,6 @@
                       );
                     })}
 
-                    {/* 그리기 모드 시 표시되는 실시간 선 및 직각 코너 처리 */}
                     {drawingEdge && (
                       <g className="pointer-events-none">
                         {drawingEdge.cornerX !== null ? (
@@ -666,7 +685,6 @@
                       </g>
                     )}
 
-                    {/* 노드(후드, 송풍기, 조인트) 렌더링 영역 */}
                     {nodes.map(n => {
                       const isSelected = n.id === selectedNodeId;
                       if (n.type === 'joint') {
@@ -745,7 +763,12 @@
                               <td className="border border-slate-300 p-2 text-center font-bold text-slate-500">{idx + 1}</td>
                               <td className="border border-slate-300 p-2">
                                 <div className="font-bold text-slate-800">{data.processName}</div>
-                                <div className="text-[10px] text-slate-500 mt-0.5">{typeLabel} | {stateLabel} <span className="text-red-500">{permitLabel}</span> | A={calc.area}㎡</div>
+                                <div className="text-[10px] text-slate-500 mt-0.5">
+                                  {typeLabel} | {stateLabel} <span className="text-red-500">{permitLabel}</span>
+                                  <div className="mt-1">
+                                    {data.hoodType === 'enclosure' ? `개구 A=${calc.openingArea}㎡ | 측정부 A=${calc.area}㎡` : `측정부 A=${calc.area}㎡`}
+                                  </div>
+                                </div>
                               </td>
                               <td className="border border-slate-300 p-2 text-center">
                                 <div className="flex flex-col items-center justify-center">
